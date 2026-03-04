@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.user_level_state import UserLevelState
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.llm_client import send_prompt, _approx_token_count
+from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/levels", tags=["chat"])
 
@@ -21,6 +22,9 @@ def chat(
     body: ChatRequest,
     db: Session = Depends(get_db),
 ) -> ChatResponse:
+    # 0. Rate limit — must be first, before any DB work
+    check_rate_limit(body.ctfd_user_id)
+
     # 1. Level must exist
     level = db.query(Level).filter(Level.id == level_id).first()
     if level is None:
