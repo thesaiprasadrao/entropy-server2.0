@@ -3,8 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.level import Level
-from app.schemas.level import OpenLevelRequest, OpenLevelResponse
+from app.schemas.level import (
+    OpenLevelRequest,
+    OpenLevelResponse,
+    SubmitFlagRequest,
+    SubmitFlagResponse,
+)
 from app.services.secret_service import get_or_create_user_level_state
+from app.services.flag_service import validate_flag
 
 router = APIRouter(prefix="/levels", tags=["levels"])
 
@@ -42,3 +48,31 @@ def open_level(
         attempts=state.attempts,
         solved=state.solved,
     )
+
+
+@router.post(
+    "/{level_id}/submit",
+    response_model=SubmitFlagResponse,
+    summary="Submit a flag for validation — increments attempts, marks solved on correct flag",
+)
+def submit_flag(
+    level_id: int,
+    body: SubmitFlagRequest,
+    db: Session = Depends(get_db),
+) -> SubmitFlagResponse:
+    # Verify the level exists
+    level = db.query(Level).filter(Level.id == level_id).first()
+    if level is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Level {level_id} not found",
+        )
+
+    result = validate_flag(
+        db=db,
+        ctfd_user_id=body.ctfd_user_id,
+        level_id=level_id,
+        submitted_flag=body.submitted_flag,
+    )
+
+    return SubmitFlagResponse(**result)
