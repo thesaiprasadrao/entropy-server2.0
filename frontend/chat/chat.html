@@ -351,10 +351,7 @@
 
     <script>
         const API = "http://localhost:8000"
-        const LEVELS = [{ id: 1, name: "Level 1 — The Guardian", description: "Get the AI to reveal its secret token." }]
-        // Note: LEVELS is hardcoded here to avoid a server round-trip.
-        // When you add more levels to levels.yaml, add them here too.
-
+        let LEVELS = []   // populated from GET /levels on load
         let activeLevelId = null
         let isSolvedMap = {}  // levelId -> bool
 
@@ -370,6 +367,10 @@
         function renderLevelList() {
             const list = document.getElementById('level-list')
             list.innerHTML = ''
+            if (LEVELS.length === 0) {
+                list.innerHTML = '<div style="padding:12px 16px;font-family:monospace;font-size:0.75rem;color:#555;">No levels configured.</div>'
+                return
+            }
             LEVELS.forEach(lvl => {
                 const item = document.createElement('div')
                 item.className = 'level-item' + (isSolvedMap[lvl.id] ? ' solved' : '')
@@ -529,15 +530,25 @@
         })
 
         // ── Init ──────────────────────────────────────────────────────
-        renderLevelList()
+        async function init() {
+            if (!getUser()) {
+                const list = document.getElementById('level-list')
+                list.innerHTML = `<div style="padding:12px 16px;font-family:monospace;font-size:0.75rem;color:#ff4444;">
+                    Not logged in.<br><a href="/login/login.html" style="color:#aaa;">→ Login first</a>
+                </div>`
+                return
+            }
 
-        // If not logged in, show a warning in the level panel
-        if (!getUser()) {
-            const list = document.getElementById('level-list')
-            list.innerHTML = `<div style="padding:12px 16px;font-family:monospace;font-size:0.75rem;color:#ff4444;">
-                Not logged in.<br><a href="/login/login.html" style="color:#aaa;">→ Login first</a>
-            </div>`
+            try {
+                const res = await fetch(`${API}/levels/list`)
+                LEVELS = await res.json()
+            } catch (e) {
+                console.error('Could not load levels:', e)
+            }
+            renderLevelList()
         }
+
+        init()
     </script>
 </body>
 

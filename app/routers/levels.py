@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.level import Level
@@ -13,6 +14,18 @@ from app.services.secret_service import get_or_create_user_level_state
 from app.services.flag_service import validate_flag
 
 router = APIRouter(prefix="/levels", tags=["levels"])
+
+
+class LevelInfo(BaseModel):
+    id: int
+    name: str
+    description: str
+
+
+@router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
+def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
+    levels = db.query(Level).order_by(Level.id).all()
+    return [LevelInfo(id=l.id, name=l.name, description=l.description or "") for l in levels]
 
 
 @router.post(

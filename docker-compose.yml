@@ -26,6 +26,7 @@ services:
       - .env
     volumes:
       - ./levels.yaml:/app/levels.yaml:ro
+      - ./app:/app/app:ro
     ports:
       - "8000:8000"
     depends_on:
