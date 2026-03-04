@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.routers import health
+from app.routers import health, levels
 from app.database import check_db_connection
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +16,7 @@ app = FastAPI(
 
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(health.router)
+app.include_router(levels.router)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
