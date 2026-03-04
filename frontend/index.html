@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta property="og:title" content="EntropyCTF">
+    <meta property="og:description" content="10 levels: ssh & file reads, bugfixes, hex/stego, jsserver quirks, commit hunts, node flags, plus hidden keys all around.">    
+    <meta property="og:image" content="../images/webthumb0.png">
+    <meta property="og:type" content="website">
+    
+    <meta property="image" content="../images/webthumb0.png">
+    <meta property="description" content="10 levels: ssh & file reads, bugfixes, hex/stego, jsserver quirks, commit hunts, node flags, plus hidden keys all around.">
+    <link rel="stylesheet" href="style.css">
+    <!-- fonts here -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Doto:wght@100..900&display=swap" rel="stylesheet">
+
+    <!-- checking stuff ignore below this -->
+    <link rel="icon" type="image/png" href="./images/flag-zoom.png">
+    <link rel="apple-touch-icon" href="./images/flag-zoom.png">
+    <link rel="icon" href="./images/flag-zoom.png">
+    <meta name="msapplication-TileImage" content="./images/flag-zoom.png">
+    <meta name="msapplication-TileColor" content="#0a0a0a">
+    <link rel="mask-icon" href="./images/flag-zoom.png" color="#0a0a0a">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+
+
+    <title>EntropyCTF</title>
+</head>
+<body>
+    <div id="chatbotcorner">
+        <img src="images/flag-newo.png" alt="chatbot" id="chatboticon">
+        <div id="hidden-chatbot">
+            <div id="top-part">
+                <div id="chatbotname">flag bot</div>
+                <div id="filler"></div>
+                <div id="chatbotclose">
+                    X
+                </div>
+            </div>
+            <div id="chat-part">
+                <p class="bot">Hello!</p>
+
+            </div>
+            <div id="input-part">
+                <input type="text" id="chatinput" placeholder="type here...">
+                <input type="submit" value="send" id="chatsend">
+            </div>
+        </div>
+    </div>
+    <div id="home-container">
+        <div id="homename">
+            <h1 id="entropyctf"><span><img src="../images/flag-newo.png" alt="flag" style="width: 52px; height: 52px;"></span>entropyCTF</h1>
+            <div id="blinking-cursor">_</div>
+        </div>
+        <div id="paras">
+            <p>test your skills xyz xyz lorem ipsum.</p>
+        </div>
+        <nav>
+        <!-- <div id="logo">
+
+        </div> -->
+        <!-- <div id="filler">
+
+        </div> -->
+        <!-- <div id="menu"> -->
+            <a href="/levels/levels.html">
+                <div class="opt" id="levels">
+                    <h4>lvls</h4>
+                </div>
+            </a>
+            <a href="/logs/logs.html">
+                <div class="opt" id="logs">
+                    <h4>logs</h4>
+                </div>
+            </a>
+            <a href="/leaderboard/leaderboard.html">
+                <div class="opt" id="leaderboard">
+                    <h4>leaderboard</h4>
+                </div>
+            </a>
+            <a href="/rules/rules.html">
+                <div class="opt" id="rules">
+                    <h4>rules</h4>
+                </div>
+            </a>
+            <a href="/login/login.html">
+                <div class="opt" id="login">
+                    <h4>key/login</h4>
+                </div>
+            </a>
+
+        <!-- </div> -->
+        </nav>
+        <div id="paras">
+            <p>
+                > challenges online: <span id="chall">$left/$total</span>
+            </p>
+            
+            <p>
+                > server status: <span id="serverstats">offline</span>
+            </p>
+            <p>
+                > time left : <span id="time">$finaltime - $currtime</span>
+            </p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

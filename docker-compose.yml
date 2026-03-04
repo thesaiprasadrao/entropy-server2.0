@@ -30,5 +30,17 @@ services:
       db:
         condition: service_healthy
 
+  frontend:
+    image: nginx:alpine
+    container_name: entropy_frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:

@@ -1,8 +1,9 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, levels, chat
+from app.routers import health, levels, chat, leaderboard
 from app.database import check_db_connection
 
 logging.basicConfig(level=logging.INFO)
@@ -14,10 +15,19 @@ app = FastAPI(
     description="Secure backend for AI prompt jailbreak challenges.",
 )
 
+# ── CORS (allow Nginx frontend on port 80) ─────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost", "http://localhost:80", "http://127.0.0.1"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(health.router)
 app.include_router(levels.router)
 app.include_router(chat.router)
+app.include_router(leaderboard.router)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
