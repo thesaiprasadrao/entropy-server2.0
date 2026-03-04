@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./levels.yaml:/app/levels.yaml:ro
     ports:
       - "8000:8000"
     depends_on:

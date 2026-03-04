@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import health, levels, chat, leaderboard
-from app.database import check_db_connection
+from app.database import check_db_connection, SessionLocal
+from app.services.levels_loader import seed_levels_from_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,3 +39,12 @@ def on_startup():
         logger.info("Database connection: OK")
     else:
         logger.warning("Database connection: FAILED — check DB container")
+
+    # Seed/update levels from levels.yaml
+    try:
+        db = SessionLocal()
+        seed_levels_from_config(db)
+        db.close()
+        logger.info("Levels seeded from levels.yaml")
+    except Exception as e:
+        logger.error(f"Failed to seed levels: {e}")

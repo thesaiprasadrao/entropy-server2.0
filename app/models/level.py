@@ -14,6 +14,7 @@ class Level(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    flag_pool: Mapped[str] = mapped_column(Text, nullable=True)  # comma-separated flags
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )
