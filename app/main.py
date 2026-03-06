@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import health, levels, chat, leaderboard
-from app.database import check_db_connection, SessionLocal
+from app.database import check_db_connection, SessionLocal, Base, engine
+import app.models  # noqa: F401 — ensures all models are registered with Base
 from app.services.levels_loader import seed_levels_from_config
 
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +36,10 @@ app.include_router(leaderboard.router)
 @app.on_event("startup")
 def on_startup():
     logger.info("Starting Entropy backend…")
+    # Create all tables if they don't exist yet
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created/verified")
+
     if check_db_connection():
         logger.info("Database connection: OK")
     else:

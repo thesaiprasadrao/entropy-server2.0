@@ -35,3 +35,8 @@ alembic/versions/__pycache__/
 
 # macOS
 .DS_Store
+
+
+
+# levels
+levels.yaml

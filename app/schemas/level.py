@@ -2,8 +2,7 @@ from pydantic import BaseModel
 
 
 class OpenLevelRequest(BaseModel):
-    ctfd_user_id: int
-    username: str
+    username: str   # team name — looked up in users table
 
 
 class OpenLevelResponse(BaseModel):
@@ -16,7 +15,7 @@ class OpenLevelResponse(BaseModel):
 
 
 class SubmitFlagRequest(BaseModel):
-    ctfd_user_id: int
+    username: str   # team name
     submitted_flag: str
 
 

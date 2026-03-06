@@ -357,10 +357,9 @@
 
         // ── Auth ─────────────────────────────────────────────────────
         function getUser() {
-            const uid = localStorage.getItem('ctfd_user_id')
             const uname = localStorage.getItem('username')
-            if (!uid || !uname) return null
-            return { ctfd_user_id: parseInt(uid), username: uname }
+            if (!uname) return null
+            return { username: uname }
         }
 
         // ── Render level list ─────────────────────────────────────────
@@ -417,7 +416,7 @@
                 const res = await fetch(`${API}/levels/${lvl.id}/open`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ctfd_user_id: user.ctfd_user_id, username: user.username }),
+                    body: JSON.stringify({ username: user.username }),
                 })
                 if (res.ok) {
                     const data = await res.json()
@@ -462,7 +461,7 @@
                 const res = await fetch(`${API}/levels/${activeLevelId}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ctfd_user_id: user.ctfd_user_id, message: text }),
+                    body: JSON.stringify({ username: user.username, message: text }),
                 })
                 const data = await res.json()
                 document.getElementById('thinking').style.display = 'none'
@@ -502,7 +501,7 @@
                 const res = await fetch(`${API}/levels/${activeLevelId}/submit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ctfd_user_id: user.ctfd_user_id, submitted_flag: flag }),
+                    body: JSON.stringify({ username: user.username, submitted_flag: flag }),
                 })
                 const data = await res.json()
                 document.getElementById('flag-submit').disabled = false

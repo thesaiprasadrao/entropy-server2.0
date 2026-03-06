@@ -48,7 +48,6 @@ def open_level(
 
     state = get_or_create_user_level_state(
         db=db,
-        ctfd_user_id=body.ctfd_user_id,
         username=body.username,
         level_id=level_id,
     )
@@ -83,7 +82,7 @@ def submit_flag(
 
     result = validate_flag(
         db=db,
-        ctfd_user_id=body.ctfd_user_id,
+        username=body.username,
         level_id=level_id,
         submitted_flag=body.submitted_flag,
     )

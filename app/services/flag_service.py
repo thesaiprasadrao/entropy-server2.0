@@ -7,25 +7,14 @@ from app.models.user import User
 
 def validate_flag(
     db: Session,
-    ctfd_user_id: int,
+    username: str,
     level_id: int,
     submitted_flag: str,
 ) -> dict:
-    """
-    Validate a submitted flag for a given user and level.
+    """Validate a submitted flag for a given user and level."""
+    import hmac
 
-    Flow:
-    1. Fetch the user row
-    2. Fetch the user_level_state for (user, level)
-    3. Increment attempts unconditionally
-    4. Compare submitted_flag to stored flag_value (constant-time via secrets.compare_digest)
-    5. If correct, mark solved = True
-
-    Returns a dict with: correct, attempts, solved, message
-    """
-    import hmac  # constant-time string comparison
-
-    user = db.query(User).filter(User.ctfd_user_id == ctfd_user_id).first()
+    user = db.query(User).filter(User.username == username).first()
     if user is None:
         return {
             "correct": False,

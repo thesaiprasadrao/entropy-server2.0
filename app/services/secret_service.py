@@ -1,27 +1,24 @@
 import secrets
 import string
+import hashlib
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.user_level_state import UserLevelState
 from app.models.user import User
 from app.models.level import Level
+from app.config import get_settings
 
 
 _SECRET_ALPHABET = string.ascii_letters + string.digits
-_SECRET_LENGTH = 6
 
 
 def _generate_random_secret() -> str:
-    """Fallback: cryptographically random 6-character alphanumeric secret."""
-    return "".join(secrets.choice(_SECRET_ALPHABET) for _ in range(_SECRET_LENGTH))
+    return "".join(secrets.choice(_SECRET_ALPHABET) for _ in range(6))
 
 
 def _pick_flag(level: Level) -> str:
-    """
-    Pick a flag for this user from the level's flag_pool.
-    Falls back to a random secret if the pool is empty or not configured.
-    """
     if level.flag_pool:
         pool = [f.strip() for f in level.flag_pool.split(",") if f.strip()]
         if pool:
@@ -29,30 +26,45 @@ def _pick_flag(level: Level) -> str:
     return _generate_random_secret()
 
 
-def get_or_create_user(db: Session, ctfd_user_id: int, username: str) -> User:
-    """Fetch an existing User or create a new one for the given ctfd_user_id."""
-    user = db.query(User).filter(User.ctfd_user_id == ctfd_user_id).first()
-    if user is None:
-        user = User(ctfd_user_id=ctfd_user_id, username=username)
-        db.add(user)
-        db.flush()
+def _stable_id_from_name(username: str) -> int:
+    """Derive a stable positive int from a team name, within Postgres INTEGER range."""
+    h = hashlib.sha256(username.lower().strip().encode()).hexdigest()
+    return int(h[:8], 16) % (2**31)  # clamp to signed 32-bit max
+
+
+def get_or_create_user(db: Session, username: str) -> User:
+    """
+    Look up a user by username (team name).
+    - If pre-seeded: return the existing row.
+    - If not found and dev mode (ALLOW_UNKNOWN_TEAMS=true): auto-create.
+    - If not found and event mode (ALLOW_UNKNOWN_TEAMS=false): raise 403.
+    """
+    user = db.query(User).filter(User.username == username).first()
+    if user:
+        return user
+
+    # Not pre-seeded
+    allow = getattr(get_settings(), "ALLOW_UNKNOWN_TEAMS", True)
+    if not allow:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Team '{username}' is not registered. Contact the organiser.",
+        )
+
+    # Dev / open mode — auto-create with hash-based ID
+    ctfd_user_id = _stable_id_from_name(username)
+    user = User(ctfd_user_id=ctfd_user_id, username=username)
+    db.add(user)
+    db.flush()
     return user
 
 
 def get_or_create_user_level_state(
     db: Session,
-    ctfd_user_id: int,
     username: str,
     level_id: int,
 ) -> UserLevelState:
-    """
-    Return the existing UserLevelState for this (user, level) pair.
-    If one does not exist, pick a flag from the level's pool and persist.
-
-    Flag value = the picked flag (exact match required on submission).
-    secret_key = same as flag_value for display purposes.
-    """
-    user = get_or_create_user(db, ctfd_user_id, username)
+    user = get_or_create_user(db, username)
 
     state = (
         db.query(UserLevelState)

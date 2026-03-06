@@ -45,17 +45,6 @@ services:
     depends_on:
       - backend
 
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: entropy_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@entropy.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
 
 volumes:
   postgres_data:

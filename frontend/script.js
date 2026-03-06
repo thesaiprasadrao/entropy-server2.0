@@ -1,18 +1,16 @@
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const backendurl = "http://localhost:8000"
+const backendurl = "/api"
 const LEVEL_ID = 1   // single jailbreak level
 
 // ── Auth helpers (stored in localStorage) ────────────────────────────────────
 function getUser() {
-    const uid = localStorage.getItem('ctfd_user_id')
     const uname = localStorage.getItem('username')
-    if (!uid || !uname) return null
-    return { ctfd_user_id: parseInt(uid), username: uname }
+    if (!uname) return null
+    return { username: uname }
 }
 
-function setUser(ctfd_user_id, username) {
-    localStorage.setItem('ctfd_user_id', ctfd_user_id)
+function setUser(username) {
     localStorage.setItem('username', username)
 }
 
@@ -69,23 +67,7 @@ try {
 
 setInterval(() => { timeleft() }, 1200)
 
-// ── Open level on page load (levels.html) ─────────────────────────────────────
-async function openLevel(ctfd_user_id, username) {
-    try {
-        const res = await fetch(`${backendurl}/levels/${LEVEL_ID}/open`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ctfd_user_id, username }),
-        })
-        if (!res.ok) { return null }
-        return await res.json()
-    } catch (error) {
-        console.error('Error opening level:', error)
-        return null
-    }
-}
-
-// ── Level status + flag submission (levels.html) ──────────────────────────────
+// ── Levels page: fetch + render + open + flag submit (levels.html) ────────────
 if (document.URL.includes("levels.html")) {
     window.addEventListener("DOMContentLoaded", async () => {
         const user = getUser()
@@ -95,57 +77,101 @@ if (document.URL.includes("levels.html")) {
             return
         }
 
-        // Open level to get/create user secret
-        const state = await openLevel(user.ctfd_user_id, user.username)
-        if (state) {
-            // Mark level as unlocked in UI
-            const badge = document.querySelector(`#lvl${LEVEL_ID} .badge`)
-            if (badge) {
-                badge.classList.remove("locked")
-                badge.classList.add("unlocked")
-                badge.textContent = "unlocked"
-            }
+        const loadingEl = document.getElementById("levels-loading")
+        const rowEl = document.getElementById("levels-row")
+
+        // 1. Fetch all levels from backend
+        let levels = []
+        try {
+            const res = await fetch(`${backendurl}/levels/list`)
+            if (res.ok) { levels = await res.json() }
+        } catch (e) {
+            console.error("Failed to fetch levels:", e)
         }
-    })
 
-    const flagcheck = document.querySelectorAll('.check-btn')
-    flagcheck.forEach(element => {
-        element.addEventListener('click', async () => {
-            const user = getUser()
-            if (!user) {
-                alert("Please login first!")
-                return
-            }
+        if (!levels.length) {
+            if (loadingEl) loadingEl.textContent = "No levels found."
+            return
+        }
+        if (loadingEl) loadingEl.remove()
 
-            const flaginput = element.closest('.flag-row').querySelector('.flag-input')
-            const lvlEl = element.closest('.lvl')
-            const lvlid = lvlEl ? parseInt(lvlEl.id.replace('lvl', '')) : LEVEL_ID
+        // 2. Render each level card
+        levels.forEach(lvl => {
+            const card = document.createElement("div")
+            card.className = "lvl"
+            card.id = `lvl${lvl.id}`
+            card.innerHTML = `
+                <div class="title">lvl${lvl.id}</div>
+                <div class="meta">${escapeHtml(lvl.name)}</div>
+                <div class="badge locked">locked</div>
+                <div class="hiddencontent">
+                    <p class="small">${escapeHtml(lvl.description)}</p>
+                    <div class="flag-row">
+                        <input type="text" placeholder="enter flag (e.g. ENTROPY{...})" class="flag-input" />
+                        <button class="check-btn">check</button>
+                        <div class="filler-lvl-btn"></div>
+                    </div>
+                </div>`
+            rowEl.appendChild(card)
 
-            if (!flaginput.value) { return }
+            // Expand/collapse on click
+            card.addEventListener("click", (event) => {
+                const ignoredTags = ["INPUT", "BUTTON", "A", "CODE"]
+                if (ignoredTags.includes(event.target.tagName)) return
+                card.classList.toggle("expanded")
+            })
 
+            // Flag submission
+            card.querySelector(".check-btn").addEventListener("click", async () => {
+                const flaginput = card.querySelector(".flag-input")
+                if (!flaginput.value) return
+                try {
+                    const res = await fetch(`${backendurl}/levels/${lvl.id}/submit`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: user.username, submitted_flag: flaginput.value }),
+                    })
+                    const data = await res.json()
+                    if (data.correct) {
+                        flaginput.style.border = "1px solid #00ff88"
+                        alert(`✅ Flag accepted! Attempts: ${data.attempts}`)
+                    } else {
+                        flaginput.style.border = "1px solid #ff4444"
+                        alert(`❌ Wrong flag. ${data.message}`)
+                    }
+                } catch (e) {
+                    alert("Error submitting flag, try again later")
+                }
+            })
+        })
+
+        // 3. Open all levels to fetch unlock state
+        await Promise.all(levels.map(async (lvl) => {
             try {
-                const res = await fetch(`${backendurl}/levels/${lvlid}/submit`, {
+                const res = await fetch(`${backendurl}/levels/${lvl.id}/open`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        ctfd_user_id: user.ctfd_user_id,
-                        submitted_flag: flaginput.value,
-                    }),
+                    body: JSON.stringify({ username: user.username }),
                 })
-                const response = await res.json()
-                if (response.correct) {
-                    flaginput.style.border = "1px solid #00ff88"
-                    alert(`✅ Flag accepted! Attempts: ${response.attempts}`)
-                } else {
-                    flaginput.style.border = "1px solid #ff4444"
-                    alert(`❌ Wrong flag. ${response.message}`)
+                if (res.ok) {
+                    const badge = document.querySelector(`#lvl${lvl.id} .badge`)
+                    if (badge) {
+                        badge.classList.remove("locked")
+                        badge.classList.add("unlocked")
+                        badge.textContent = "unlocked"
+                    }
                 }
-            } catch (error) {
-                console.error('Error:', error)
-                alert("Error submitting flag, try again later")
-            }
-        })
+            } catch (e) { /* silently ignore per-level open errors */ }
+        }))
     })
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
 }
 
 // ── Chatbot (all pages with chatbotcorner) ────────────────────────────────────
@@ -193,7 +219,7 @@ if (document.querySelector('#chatboticon')) {
             const res = await fetch(`${backendurl}/levels/${LEVEL_ID}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ctfd_user_id: user.ctfd_user_id, message: userInput }),
+                body: JSON.stringify({ username: user.username, message: userInput }),
             })
             const data = await res.json()
             const botMessage = document.createElement('p')
@@ -265,20 +291,13 @@ if (document.URL.includes("login.html")) {
     const loginbtn = document.querySelector('#loginbtn')
     if (loginbtn) {
         loginbtn.addEventListener('click', async () => {
-            const ctfdId = document.querySelector('#ctfd-id-input').value.trim()
             const username = document.querySelector('#username-input').value.trim()
-
-            if (!ctfdId || !username) {
-                alert("Enter both your CTFd User ID and username.")
+            if (!username) {
+                alert("Enter your team name.")
                 return
             }
-            if (isNaN(parseInt(ctfdId))) {
-                alert("CTFd User ID must be a number.")
-                return
-            }
-
-            setUser(parseInt(ctfdId), username)
-            alert(`Logged in as: ${username} (ID: ${ctfdId})`)
+            setUser(username)
+            alert(`Logged in as: ${username}`)
             window.location.href = "../index.html"
         })
     }

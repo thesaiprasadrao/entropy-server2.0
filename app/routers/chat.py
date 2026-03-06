@@ -23,7 +23,7 @@ def chat(
     db: Session = Depends(get_db),
 ) -> ChatResponse:
     # 0. Rate limit — must be first, before any DB work
-    check_rate_limit(body.ctfd_user_id)
+    check_rate_limit(body.username)
 
     # 1. Level must exist
     level = db.query(Level).filter(Level.id == level_id).first()
@@ -34,7 +34,7 @@ def chat(
         )
 
     # 2. User must exist (must have called /open first)
-    user = db.query(User).filter(User.ctfd_user_id == body.ctfd_user_id).first()
+    user = db.query(User).filter(User.username == body.username).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
