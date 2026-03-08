@@ -1,11 +1,11 @@
 """
 Entropy — Event Readiness Load Test
-Phase 7: 60 concurrent users, validates system stability.
+Phase 7: 100 concurrent users, validates system stability.
 
 Run (headless, 30-second burst):
     locust -f locustfile.py \
         --host http://localhost:8000 \
-        --users 60 \
+        --users 100 \
         --spawn-rate 10 \
         --run-time 30s \
         --headless \
@@ -14,7 +14,7 @@ Run (headless, 30-second burst):
 Full 3-hour event simulation (run on event day):
     locust -f locustfile.py \
         --host http://localhost:8000 \
-        --users 60 \
+        --users 100 \
         --spawn-rate 5 \
         --run-time 3h \
         --headless \

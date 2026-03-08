@@ -52,8 +52,8 @@ def get_or_create_user(db: Session, username: str) -> User:
         )
 
     # Dev / open mode — auto-create with hash-based ID
-    ctfd_user_id = _stable_id_from_name(username)
-    user = User(ctfd_user_id=ctfd_user_id, username=username)
+    ctf_user_id = _stable_id_from_name(username)
+    user = User(ctf_user_id=ctf_user_id, username=username)
     db.add(user)
     db.flush()
     return user

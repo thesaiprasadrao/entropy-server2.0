@@ -16,7 +16,7 @@ class User(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    ctfd_user_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    ctf_user_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow

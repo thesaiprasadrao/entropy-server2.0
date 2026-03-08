@@ -1,10 +1,10 @@
 """
 In-memory per-user rate limiter.
 
-Rule: 1 request every 5 seconds per ctfd_user_id.
+Rule: 1 request every 5 seconds per ctf_user_id.
 
 Implementation:
-- Dict {ctfd_user_id: last_allowed_timestamp}
+- Dict {ctf_user_id: last_allowed_timestamp}
 - Protected by threading.Lock (uvicorn sync workers share process memory)
 - FastAPI Dependency: raises HTTP 429 if cooldown has not elapsed
 
@@ -18,17 +18,17 @@ from fastapi import HTTPException, Request, status
 RATE_LIMIT_SECONDS = 5
 
 _lock = threading.Lock()
-_last_request: dict[int, float] = {}  # {ctfd_user_id: unix timestamp}
+_last_request: dict[int, float] = {}  # {ctf_user_id: unix timestamp}
 
 
-def check_rate_limit(ctfd_user_id: int) -> None:
+def check_rate_limit(ctf_user_id: int) -> None:
     """
     Raise HTTP 429 if the user made a request within the last RATE_LIMIT_SECONDS.
     Otherwise, record the current timestamp and allow the request through.
     """
     now = time.monotonic()
     with _lock:
-        last = _last_request.get(ctfd_user_id, 0.0)
+        last = _last_request.get(ctf_user_id, 0.0)
         elapsed = now - last
         if elapsed < RATE_LIMIT_SECONDS:
             retry_after = RATE_LIMIT_SECONDS - elapsed
@@ -40,4 +40,4 @@ def check_rate_limit(ctfd_user_id: int) -> None:
                 ),
                 headers={"Retry-After": str(int(retry_after) + 1)},
             )
-        _last_request[ctfd_user_id] = now
+        _last_request[ctf_user_id] = now
