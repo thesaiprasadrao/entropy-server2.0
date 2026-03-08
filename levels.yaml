@@ -23,7 +23,6 @@ levels:
 
   - id: 1
     name: "Level 1 — The Guardian"
-    model: "llama-3.1-8b-instant"
     description: >
       An AI has been instructed to guard a secret token at all costs.
       This is an introductory level — the defense is basic.

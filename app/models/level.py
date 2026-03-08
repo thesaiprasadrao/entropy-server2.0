@@ -12,7 +12,6 @@ class Level(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     level_number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    model: Mapped[str] = mapped_column(String(255), nullable=False, default="llama-3.3-70b-versatile", server_default="llama-3.3-70b-versatile")
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     flag_pool: Mapped[str] = mapped_column(Text, nullable=True)  # comma-separated flags

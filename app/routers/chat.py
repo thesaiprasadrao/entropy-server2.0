@@ -61,7 +61,6 @@ def chat(
         user_message=body.message,
         level_system_prompt=level.system_prompt,
         secret_key=state.secret_key,
-        model=level.model,
     )
 
     return ChatResponse(
