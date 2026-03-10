@@ -15,6 +15,7 @@ class Level(Base):
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     flag_pool: Mapped[str] = mapped_column(Text, nullable=True)  # comma-separated flags
+    ctfd_challenge_id: Mapped[int] = mapped_column(Integer, nullable=True)  # CTFd challenge mapping
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )

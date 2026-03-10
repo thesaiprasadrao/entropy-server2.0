@@ -43,6 +43,7 @@ def seed_levels_from_config(db: Session) -> None:
             existing.description = cfg.get("description", "")
             existing.system_prompt = cfg.get("system_prompt", "")
             existing.flag_pool = flag_pool_str
+            existing.ctfd_challenge_id = cfg.get("ctfd_challenge_id")  # None if not set in yaml
         else:
             db.add(Level(
                 id=level_id,
@@ -51,6 +52,7 @@ def seed_levels_from_config(db: Session) -> None:
                 description=cfg.get("description", ""),
                 system_prompt=cfg.get("system_prompt", ""),
                 flag_pool=flag_pool_str,
+                ctfd_challenge_id=cfg.get("ctfd_challenge_id"),
             ))
 
     db.commit()

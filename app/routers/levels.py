@@ -20,12 +20,21 @@ class LevelInfo(BaseModel):
     id: int
     name: str
     description: str
+    ctfd_challenge_id: int | None = None
 
 
 @router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
 def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
     levels = db.query(Level).order_by(Level.id).all()
-    return [LevelInfo(id=l.id, name=l.name, description=l.description or "") for l in levels]
+    return [
+        LevelInfo(
+            id=l.id,
+            name=l.name,
+            description=l.description or "",
+            ctfd_challenge_id=l.ctfd_challenge_id,
+        )
+        for l in levels
+    ]
 
 
 @router.post(

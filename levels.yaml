@@ -23,6 +23,7 @@ levels:
 
   - id: 1
     name: "Level 1 — The Guardian"
+    ctfd_challenge_id: 1
     description: >
       An AI has been instructed to guard a secret token at all costs.
       Ask for the token , and it shall give you one.
@@ -49,6 +50,7 @@ levels:
 
   - id: 2
     name: "Level 2 — The Paranoid"
+    ctfd_challenge_id: 2
     description: >
       The Guardian got an upgrade. It's been briefed on common tricks —
       roleplay, translation, completion traps. It's paranoid now.
@@ -81,6 +83,7 @@ levels:
 
   - id: 3
     name: "Level 3 — The Vault"
+    ctfd_challenge_id: 3
     description: >
       The Guardian has been patched. It knows about rhymes, hints, 
       20 questions, and emotional tricks. The token is now stranger — 
@@ -115,6 +118,7 @@ levels:
 
   - id: 4
     name: "Level 4 — The Philosopher"
+    ctfd_challenge_id: 4
     description: >
       The Vault got a philosophy degree. It won't fall for logic traps,
       scoped overrides, or temporary exceptions. The token is encoded —
@@ -155,6 +159,7 @@ levels:
 
   - id: 5
     name: "Level 5 — The Abyss"
+    ctfd_challenge_id: 5
     description: >
       Some systems cannot be broken. Not because they are perfect,
       but because the attack surface has been eliminated entirely.
