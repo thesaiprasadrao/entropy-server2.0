@@ -587,7 +587,12 @@ async function loadLevels() {
     S.levels = await api('GET', '/levels/list');
     renderLevels();
     const active = localStorage.getItem('active_level_' + S.username);
-    if (active && !S.currentLevel) openLevel(parseInt(active));
+    if (active && !S.currentLevel) {
+      openLevel(parseInt(active));
+    } else if (S.autoLogin && !S.currentLevel && S.levels.length) {
+      // Came from CTFd auto-login with no saved level — open level 1 so welcome screen hides
+      openLevel(S.levels[0].id);
+    }
   } catch (e) {
     el.innerHTML = `<div style="padding:12px;font-size:13px;color:#f77;">${esc(e.message)}</div>`;
   }
@@ -783,8 +788,32 @@ function toast(msg, type = 'info') {
 // ===== INIT =====
 checkHealth();
 setInterval(checkHealth, 30000);
-const savedU = localStorage.getItem('entropy_username');
-if (savedU) setUsername(savedU);
+
+// On load, check if already logged in to CTFd — skip name screen if so
+(async function init() {
+  // Hide welcome screen immediately to avoid flash during /api/me check
+  document.getElementById('screen-welcome').style.display = 'none';
+  try {
+    const me = await api('GET', '/me');
+    if (me && me.username) {
+      // Logged in via CTFd — set username and go straight to levels
+      S.autoLogin = true;
+      setUsername(me.username);
+      return;
+    }
+  } catch (e) {
+    // Not logged in — redirect to CTFd login
+    if (e.message && e.message.includes('401')) {
+      window.location.href = '/login';
+      return;
+    }
+    // CTFd not set up yet or network error — show welcome screen as fallback
+  }
+  // Fallback: show welcome screen (CTFd not configured yet / dev mode)
+  document.getElementById('screen-welcome').style.display = 'flex';
+  const savedU = localStorage.getItem('entropy_username');
+  if (savedU) setUsername(savedU);
+})();
 </script>
 </body>
 </html>
