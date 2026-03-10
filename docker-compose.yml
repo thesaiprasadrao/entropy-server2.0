@@ -44,6 +44,22 @@ services:
       - "80:80"
     depends_on:
       - backend
+      - ctfd
+
+  ctfd:
+    image: ctfd/ctfd:latest
+    container_name: entropy_ctfd
+    restart: always
+    environment:
+      - SECRET_KEY=${CTFD_SECRET_KEY}
+      - DATABASE_URL=sqlite:////var/ctfd/ctfd.db
+      - UPLOAD_FOLDER=/var/ctfd/uploads
+      - LOG_FOLDER=/var/ctfd/logs
+      - WORKERS=1
+      - REVERSE_PROXY=true
+    volumes:
+      - ./ctfd:/var/ctfd
+    # No host port published — accessed only via nginx at /ctfd/
 
 
 volumes:

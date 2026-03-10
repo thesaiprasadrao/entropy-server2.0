@@ -1,0 +1,4 @@
+# Ignore CTFd runtime files written at startup — keep directory structure in git
+*
+!.gitkeep
+!.gitignore
