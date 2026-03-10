@@ -16,6 +16,11 @@ CTFD_INTERNAL_URL = "http://ctfd:8000"
 REQUEST_TIMEOUT = 5.0  # seconds
 
 
+class MeResponse(BaseModel):
+    username: str
+    name: str
+
+
 class SubmitFlagRequest(BaseModel):
     flag: str
     level_id: int  # Backend resolves this to ctfd_challenge_id via DB
@@ -24,6 +29,37 @@ class SubmitFlagRequest(BaseModel):
 class SubmitFlagResponse(BaseModel):
     status: str   # "correct" | "incorrect"
     message: str
+
+
+@router.get("/me", response_model=MeResponse)
+def get_me(request: Request) -> MeResponse:
+    """Fetch the CTFd-authenticated user's info from the session cookie."""
+    cookies = dict(request.cookies)
+    if not cookies:
+        raise HTTPException(status_code=401, detail="Not logged in to CTFd.")
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            resp = client.get(
+                f"{CTFD_INTERNAL_URL}/api/v1/users/me",
+                cookies=cookies,
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="CTFd timed out.")
+    except (httpx.RequestError, httpx.HTTPStatusError):
+        raise HTTPException(status_code=401, detail="Not logged in to CTFd.")
+
+    user_data = data.get("data", {})
+    # CTFd returns 200 even for anonymous users when not logged in — check id
+    if not user_data.get("id"):
+        raise HTTPException(status_code=401, detail="Not logged in to CTFd.")
+
+    return MeResponse(
+        username=user_data.get("name", ""),
+        name=user_data.get("name", ""),
+    )
 
 
 @router.post("/submit_flag", response_model=SubmitFlagResponse)
