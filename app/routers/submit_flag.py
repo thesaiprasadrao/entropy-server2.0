@@ -1,4 +1,5 @@
 import logging
+import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -62,6 +63,21 @@ def get_me(request: Request) -> MeResponse:
     )
 
 
+def get_ctfd_nonce(cookies: dict) -> str:
+    """Fetch a fresh CSRF nonce from CTFd's main page for the given session."""
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            resp = client.get(f"{CTFD_INTERNAL_URL}/", cookies=cookies)
+        # CTFd embeds: window.init = {'csrfNonce': "abc123...", ...}
+        match = re.search(r"""['"]csrfNonce['"]\s*:\s*"([a-f0-9]+)""", resp.text)
+        if match:
+            return match.group(1)
+        logger.warning("Could not extract csrfNonce from CTFd HTML")
+    except Exception as exc:
+        logger.warning("Failed to fetch CTFd nonce: %s", exc)
+    return ""
+
+
 @router.post("/submit_flag", response_model=SubmitFlagResponse)
 def submit_flag(
     body: SubmitFlagRequest,
@@ -87,13 +103,18 @@ def submit_flag(
         logger.warning("submit_flag called with no cookies — user may not be logged into CTFd")
         raise HTTPException(
             status_code=401,
-            detail="No CTFd session found. Please log in at /ctfd/ first.",
+            detail="No CTFd session found. Please log in first.",
         )
+
+    # 3. Fetch CSRF nonce — CTFd requires this on every POST to its API
+    nonce = get_ctfd_nonce(cookies)
 
     payload = {
         "challenge_id": challenge_id,
         "submission": body.flag,
     }
+    if nonce:
+        payload["nonce"] = nonce
 
     logger.info(
         "Forwarding flag submission: level_id=%s challenge_id=%s",
