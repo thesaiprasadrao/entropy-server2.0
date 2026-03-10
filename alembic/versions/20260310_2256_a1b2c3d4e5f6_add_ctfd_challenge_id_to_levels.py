@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 
 
 # revision identifiers, used by Alembic.
@@ -19,15 +20,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add nullable column — existing rows get NULL, no data loss, re-seeding fills values
-    op.add_column('levels', sa.Column('ctfd_challenge_id', sa.Integer(), nullable=True))
+    conn = op.get_bind()
 
-    # Also add flag_pool column if missing (added after initial migration)
-    with op.batch_alter_table('levels') as batch_op:
-        try:
-            batch_op.add_column(sa.Column('flag_pool', sa.Text(), nullable=True))
-        except Exception:
-            pass  # Column already exists on newer deployments
+    # Add ctfd_challenge_id if it doesn't already exist
+    conn.execute(text(
+        "ALTER TABLE levels ADD COLUMN IF NOT EXISTS ctfd_challenge_id INTEGER"
+    ))
+
+    # Add flag_pool if it doesn't already exist (may have been added outside migrations)
+    conn.execute(text(
+        "ALTER TABLE levels ADD COLUMN IF NOT EXISTS flag_pool TEXT"
+    ))
 
 
 def downgrade() -> None:
