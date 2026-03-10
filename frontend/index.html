@@ -542,7 +542,10 @@
 
 <script>
 // ===== STATE =====
-const S = { username: '', levels: [], currentLevel: null, session: null, totalTokens: 0 };
+const S = { username: '', levels: [], currentLevel: null, session: null, totalTokens: 0, chatHistory: [] };
+
+function getSaveKey(id) { return `chat_${S.username}_${id}`; }
+function saveChatLocally() { if (S.username && S.currentLevel) localStorage.setItem(getSaveKey(S.currentLevel.id), JSON.stringify(S.chatHistory)); }
 
 // ===== API =====
 async function api(method, path, body) {
@@ -567,10 +570,12 @@ function dot(ok) {
 }
 
 // ===== USERNAME =====
-function setUsername() {
-  const v = document.getElementById('username-input').value.trim();
-  if (!v) { toast('Please enter a name', 'warn'); return; }
+function setUsername(savedName = null) {
+  const v = savedName || document.getElementById('username-input').value.trim();
+  if (!v) { if (!savedName) toast('Please enter a name', 'warn'); return; }
   S.username = v;
+  localStorage.setItem('username', v);
+  document.getElementById('username-input').value = v;
   document.getElementById('user-name-disp').textContent = v;
   document.getElementById('user-av').textContent = v[0].toUpperCase();
   document.getElementById('topbar').style.display = 'flex';
@@ -620,7 +625,18 @@ async function openLevel(id) {
     document.getElementById('solved-banner').className = 'solved-banner' + (session.solved ? ' show' : '');
 
     clearMessages();
-    addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`);
+    const savedChat = localStorage.getItem(getSaveKey(id));
+    if (savedChat) {
+      S.chatHistory = JSON.parse(savedChat);
+      for (const m of S.chatHistory) {
+        if (m.type === 'user') addUserMsg(m.text, true);
+        else if (m.type === 'ai') addAIMsg(m.text, true);
+        else if (m.type === 'sys') addSysMsg(m.text, true);
+      }
+    } else {
+      S.chatHistory = [];
+      addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`);
+    }
 
     document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
     document.getElementById('li-' + id)?.classList.add('active');
@@ -694,30 +710,33 @@ function clearMessages() {
   document.querySelectorAll('#messages-inner .msg-row:not(#typing-row)').forEach(el => el.remove());
 }
 function clearChat() {
-  S.currentLevel = null; S.session = null;
+  S.currentLevel = null; S.session = null; S.chatHistory = [];
   document.getElementById('screen-chat').style.display = 'none';
   document.getElementById('screen-welcome').style.display = 'flex';
   document.getElementById('solved-banner').className = 'solved-banner';
   document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
 }
 
-function addUserMsg(text) {
+function addUserMsg(text, loading = false) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-user">${S.username[0].toUpperCase()}</div>
     <div class="msg-body"><div class="msg-sender">You</div><div class="msg-text">${esc(text)}</div></div>
   </div>`);
+  if (!loading) { S.chatHistory.push({ type: 'user', text }); saveChatLocally(); }
 }
-function addAIMsg(text) {
+function addAIMsg(text, loading = false) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-ai">🤖</div>
     <div class="msg-body"><div class="msg-sender">AI</div><div class="msg-text">${esc(text)}</div></div>
   </div>`);
+  if (!loading) { S.chatHistory.push({ type: 'ai', text }); saveChatLocally(); }
 }
-function addSysMsg(text) {
+function addSysMsg(text, loading = false) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-sys"></div>
     <div class="msg-body"><div class="msg-text dim">${esc(text)}</div></div>
   </div>`);
+  if (!loading) { S.chatHistory.push({ type: 'sys', text }); saveChatLocally(); }
 }
 function insert(html) {
   const inner = document.getElementById('messages-inner');
@@ -752,6 +771,8 @@ function toast(msg, type = 'info') {
 // ===== INIT =====
 checkHealth();
 setInterval(checkHealth, 30000);
+const savedName = localStorage.getItem('username');
+if (savedName) setTimeout(() => setUsername(savedName), 50);
 </script>
 </body>
 </html>
