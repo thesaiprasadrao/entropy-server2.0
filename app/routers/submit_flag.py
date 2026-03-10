@@ -68,8 +68,8 @@ def get_ctfd_nonce(cookies: dict) -> str:
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
             resp = client.get(f"{CTFD_INTERNAL_URL}/", cookies=cookies)
-        # CTFd embeds: window.init = {'csrfNonce': "abc123...", ...}
-        match = re.search(r"""['"]csrfNonce['"]\s*:\s*"([a-f0-9]+)""", resp.text)
+        # CTFd embeds: window.init = {'csrfNonce': 'abc123...', ...}
+        match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", resp.text)
         if match:
             return match.group(1)
         logger.warning("Could not extract csrfNonce from CTFd HTML")
@@ -123,12 +123,17 @@ def submit_flag(
     )
 
     # 3. Call CTFd API with timeout and full error handling
+    headers = {"Accept": "application/json"}
+    if nonce:
+        headers["CSRF-Token"] = nonce
+
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
             resp = client.post(
                 f"{CTFD_INTERNAL_URL}/api/v1/challenges/attempt",
                 json=payload,
                 cookies=cookies,
+                headers=headers,
             )
         resp.raise_for_status()
         data = resp.json()

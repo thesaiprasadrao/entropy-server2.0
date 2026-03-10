@@ -7,6 +7,9 @@ from app.routers import health, levels, chat, leaderboard, submit_flag
 from app.database import check_db_connection, SessionLocal, Base, engine
 import app.models  # noqa: F401 — ensures all models are registered with Base
 from app.services.levels_loader import seed_levels_from_config
+from app.scripts.sync_ctfd import sync_challenges
+import threading
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,3 +57,14 @@ def on_startup():
         logger.info("Levels seeded from levels.yaml")
     except Exception as e:
         logger.error(f"Failed to seed levels: {e}")
+
+    # Auto-sync CTFd challenges in the background
+    def delayed_sync():
+        logger.info("Waiting for CTFd to initialize before syncing challenges...")
+        time.sleep(5)  # Give CTFd a few seconds to start up if both are booting
+        try:
+            sync_challenges()
+        except Exception as e:
+            logger.error(f"Auto-sync failed (CTFd might not be set up yet): {e}")
+
+    threading.Thread(target=delayed_sync, daemon=True).start()

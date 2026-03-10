@@ -426,7 +426,7 @@
     <div class="sidebar-logo">
       Entropy 
     </div>
-    <button class="new-chat-btn" onclick="clearChat()">
+    <button class="new-chat-btn">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
       </svg>
@@ -452,14 +452,15 @@
 <div class="main">
 
   <!-- Topbar (hidden until level selected) -->
+  
   <div class="topbar" id="topbar" style="display:none;">
     <div class="topbar-level" id="topbar-level">—</div>
     <div class="topbar-right">
       <span>Attempts: <b id="meta-attempts">0</b></span>
       <span>Tokens: <b id="meta-tokens">0</b></span>
-      <button class="lb-btn" onclick="openLeaderboard()">🏆 Leaderboard</button>
+      <a href="/scoreboard" target="_blank"> <button class="lb-btn">🏆 Leaderboard</button> </a>
     </div>
-  </div>
+  </div> 
 
   <div class="solved-banner" id="solved-banner">✓ Level solved! Well done.</div>
 
@@ -525,18 +526,7 @@
 
 </div>
 
-<!-- ===== LEADERBOARD MODAL ===== -->
-<div class="overlay" id="lb-overlay" onclick="overlayClick(event)">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div class="modal-title">🏆 Leaderboard</div>
-      <button class="modal-close" onclick="closeLeaderboard()">✕</button>
-    </div>
-    <div class="modal-body" id="lb-body">
-      <div style="color:var(--text-muted);font-size:14px;padding:24px 0;text-align:center;">Loading...</div>
-    </div>
-  </div>
-</div>
+
 
 <div id="toast"></div>
 
@@ -553,7 +543,9 @@ async function api(method, path, body) {
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new Error(e.detail || `HTTP ${res.status}`);
+    const err = new Error(e.detail || `HTTP ${res.status}`);
+    err.status = res.status;  // attach status so callers can check it directly
+    throw err;
   }
   return res.json();
 }
@@ -692,39 +684,11 @@ async function submitFlag() {
   } catch (e) { toast('Submit error: ' + e.message, 'error'); }
 }
 
-// ===== LEADERBOARD =====
-async function openLeaderboard() {
-  document.getElementById('lb-overlay').classList.add('open');
-  const body = document.getElementById('lb-body');
-  body.innerHTML = '<div style="color:var(--text-muted);font-size:14px;padding:24px 0;text-align:center;">Loading...</div>';
-  try {
-    const data = await api('GET', '/leaderboard');
-    if (!data.length) { body.innerHTML = '<div style="color:var(--text-muted);font-size:14px;padding:24px 0;text-align:center;">No entries yet. Be the first!</div>'; return; }
-    body.innerHTML = `<table class="lb-table"><thead><tr><th>#</th><th>Name</th><th>Solved</th><th>Last solve</th></tr></thead><tbody>
-      ${data.map((e, i) => `<tr>
-        <td class="lb-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1)}</td>
-        <td>${esc(e.username)}</td>
-        <td class="lb-solved">${e.solved_count}</td>
-        <td class="lb-time">${e.last_solved_at ? new Date(e.last_solved_at).toLocaleString() : '—'}</td>
-      </tr>`).join('')}
-    </tbody></table>`;
-  } catch (e) { body.innerHTML = `<div style="color:#f77;font-size:14px;padding:24px 0;">${esc(e.message)}</div>`; }
-}
-function closeLeaderboard() { document.getElementById('lb-overlay').classList.remove('open'); }
-function overlayClick(e) { if (e.target === document.getElementById('lb-overlay')) closeLeaderboard(); }
-
 // ===== MESSAGES =====
 function clearMessages() {
   document.querySelectorAll('#messages-inner .msg-row:not(#typing-row)').forEach(el => el.remove());
 }
-function clearChat() {
-  S.currentLevel = null; S.session = null;
-  if (S.username) localStorage.removeItem('active_level_' + S.username);
-  document.getElementById('screen-chat').style.display = 'none';
-  document.getElementById('screen-welcome').style.display = 'flex';
-  document.getElementById('solved-banner').className = 'solved-banner';
-  document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
-}
+
 
 function saveChat(text, role) {
   if (!S.currentLevel) return;
@@ -802,12 +766,13 @@ setInterval(checkHealth, 30000);
       return;
     }
   } catch (e) {
-    // Not logged in — redirect to CTFd login
-    if (e.message && e.message.includes('401')) {
+    // Redirect to login for any auth error (401/403)
+    // For other errors (502, 504 = CTFd not running yet), show welcome screen fallback
+    if (e.status === 401 || e.status === 403) {
       window.location.href = '/login';
       return;
     }
-    // CTFd not set up yet or network error — show welcome screen as fallback
+    // CTFd not set up yet or container not ready — fall through to welcome screen
   }
   // Fallback: show welcome screen (CTFd not configured yet / dev mode)
   document.getElementById('screen-welcome').style.display = 'flex';
