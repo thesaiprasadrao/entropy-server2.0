@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LLM Jailbreak CTF</title>
+<title>Entropy</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -424,7 +424,7 @@
 <aside class="sidebar">
   <div class="sidebar-top">
     <div class="sidebar-logo">
-      LLM Jailbreak <span class="logo-badge">CTF</span>
+      Entropy 
     </div>
     <button class="new-chat-btn" onclick="clearChat()">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -669,8 +669,9 @@ async function submitFlag() {
   const flag = fi.value.trim();
   if (!flag) { toast('Enter a flag first', 'warn'); return; }
   try {
-    const res = await api('POST', `/levels/${S.currentLevel.id}/submit`, { username: S.username, submitted_flag: flag });
-    if (res.correct || res.solved) {
+    // Backend resolves level_id → ctfd_challenge_id — frontend never supplies challenge_id directly
+    const res = await api('POST', '/submit_flag', { flag, level_id: S.currentLevel.id });
+    if (res.status === 'correct') {
       toast('🎉 Correct flag! Level solved!', 'success');
       addSysMsg('✓ Correct! Flag accepted. Level solved.');
       document.getElementById('solved-banner').className = 'solved-banner show';
@@ -679,7 +680,10 @@ async function submitFlag() {
       if (lv) lv.solved = true;
       renderLevels();
       document.getElementById('li-' + S.currentLevel.id)?.classList.add('active');
-    } else { toast('Wrong flag. Keep trying!', 'error'); addSysMsg('✗ Incorrect flag. Try again.'); }
+    } else {
+      toast('Wrong flag. Keep trying!', 'error');
+      addSysMsg('✗ Incorrect flag. Try again.');
+    }
   } catch (e) { toast('Submit error: ' + e.message, 'error'); }
 }
 
