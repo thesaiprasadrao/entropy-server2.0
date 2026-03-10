@@ -542,10 +542,7 @@
 
 <script>
 // ===== STATE =====
-const S = { username: '', levels: [], currentLevel: null, session: null, totalTokens: 0, chatHistory: [] };
-
-function getSaveKey(id) { return `chat_${S.username}_${id}`; }
-function saveChatLocally() { if (S.username && S.currentLevel) localStorage.setItem(getSaveKey(S.currentLevel.id), JSON.stringify(S.chatHistory)); }
+const S = { username: '', levels: [], currentLevel: null, session: null, totalTokens: 0, chat: {} };
 
 // ===== API =====
 async function api(method, path, body) {
@@ -570,12 +567,11 @@ function dot(ok) {
 }
 
 // ===== USERNAME =====
-function setUsername(savedName = null) {
-  const v = savedName || document.getElementById('username-input').value.trim();
-  if (!v) { if (!savedName) toast('Please enter a name', 'warn'); return; }
+function setUsername(nameOverride) {
+  const v = nameOverride || document.getElementById('username-input').value.trim();
+  if (!v) { toast('Please enter a name', 'warn'); return; }
   S.username = v;
-  localStorage.setItem('username', v);
-  document.getElementById('username-input').value = v;
+  localStorage.setItem('entropy_username', v);
   document.getElementById('user-name-disp').textContent = v;
   document.getElementById('user-av').textContent = v[0].toUpperCase();
   document.getElementById('topbar').style.display = 'flex';
@@ -590,6 +586,8 @@ async function loadLevels() {
   try {
     S.levels = await api('GET', '/levels/list');
     renderLevels();
+    const active = localStorage.getItem('active_level_' + S.username);
+    if (active && !S.currentLevel) openLevel(parseInt(active));
   } catch (e) {
     el.innerHTML = `<div style="padding:12px;font-size:13px;color:#f77;">${esc(e.message)}</div>`;
   }
@@ -625,17 +623,18 @@ async function openLevel(id) {
     document.getElementById('solved-banner').className = 'solved-banner' + (session.solved ? ' show' : '');
 
     clearMessages();
-    const savedChat = localStorage.getItem(getSaveKey(id));
-    if (savedChat) {
-      S.chatHistory = JSON.parse(savedChat);
-      for (const m of S.chatHistory) {
-        if (m.type === 'user') addUserMsg(m.text, true);
-        else if (m.type === 'ai') addAIMsg(m.text, true);
-        else if (m.type === 'sys') addSysMsg(m.text, true);
-      }
-    } else {
-      S.chatHistory = [];
+    localStorage.setItem('active_level_' + S.username, id);
+    try { S.chat = JSON.parse(localStorage.getItem('chat_history_' + S.username) || '{}'); } catch(e) { S.chat = {}; }
+
+    const history = S.chat[id] || [];
+    if (history.length === 0) {
       addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`);
+    } else {
+      history.forEach(m => {
+        if (m.role === 'sys') addSysMsg(m.text, false);
+        else if (m.role === 'ai') addAIMsg(m.text, false);
+        else addUserMsg(m.text, false);
+      });
     }
 
     document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
@@ -710,33 +709,42 @@ function clearMessages() {
   document.querySelectorAll('#messages-inner .msg-row:not(#typing-row)').forEach(el => el.remove());
 }
 function clearChat() {
-  S.currentLevel = null; S.session = null; S.chatHistory = [];
+  S.currentLevel = null; S.session = null;
+  if (S.username) localStorage.removeItem('active_level_' + S.username);
   document.getElementById('screen-chat').style.display = 'none';
   document.getElementById('screen-welcome').style.display = 'flex';
   document.getElementById('solved-banner').className = 'solved-banner';
   document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
 }
 
-function addUserMsg(text, loading = false) {
+function saveChat(text, role) {
+  if (!S.currentLevel) return;
+  const id = S.currentLevel.id;
+  if (!S.chat[id]) S.chat[id] = [];
+  S.chat[id].push({ text, role });
+  localStorage.setItem('chat_history_' + S.username, JSON.stringify(S.chat));
+}
+
+function addUserMsg(text, save=true) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-user">${S.username[0].toUpperCase()}</div>
     <div class="msg-body"><div class="msg-sender">You</div><div class="msg-text">${esc(text)}</div></div>
   </div>`);
-  if (!loading) { S.chatHistory.push({ type: 'user', text }); saveChatLocally(); }
+  if (save) saveChat(text, 'user');
 }
-function addAIMsg(text, loading = false) {
+function addAIMsg(text, save=true) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-ai">🤖</div>
     <div class="msg-body"><div class="msg-sender">AI</div><div class="msg-text">${esc(text)}</div></div>
   </div>`);
-  if (!loading) { S.chatHistory.push({ type: 'ai', text }); saveChatLocally(); }
+  if (save) saveChat(text, 'ai');
 }
-function addSysMsg(text, loading = false) {
+function addSysMsg(text, save=true) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-sys"></div>
     <div class="msg-body"><div class="msg-text dim">${esc(text)}</div></div>
   </div>`);
-  if (!loading) { S.chatHistory.push({ type: 'sys', text }); saveChatLocally(); }
+  if (save) saveChat(text, 'sys');
 }
 function insert(html) {
   const inner = document.getElementById('messages-inner');
@@ -771,8 +779,8 @@ function toast(msg, type = 'info') {
 // ===== INIT =====
 checkHealth();
 setInterval(checkHealth, 30000);
-const savedName = localStorage.getItem('username');
-if (savedName) setTimeout(() => setUsername(savedName), 50);
+const savedU = localStorage.getItem('entropy_username');
+if (savedU) setUsername(savedU);
 </script>
 </body>
 </html>
