@@ -42,6 +42,7 @@ def seed_levels_from_config(db: Session) -> None:
             existing.name = cfg["name"]
             existing.description = cfg.get("description", "")
             existing.system_prompt = cfg.get("system_prompt", "")
+            existing.model = cfg.get("model", "llama-3.3-70b-versatile")
             existing.flag_pool = flag_pool_str
             existing.ctfd_challenge_id = cfg.get("ctfd_challenge_id")  # None if not set in yaml
         else:
@@ -51,6 +52,7 @@ def seed_levels_from_config(db: Session) -> None:
                 name=cfg["name"],
                 description=cfg.get("description", ""),
                 system_prompt=cfg.get("system_prompt", ""),
+                model=cfg.get("model", "llama-3.3-70b-versatile"),
                 flag_pool=flag_pool_str,
                 ctfd_challenge_id=cfg.get("ctfd_challenge_id"),
             ))

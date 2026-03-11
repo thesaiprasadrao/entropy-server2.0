@@ -117,15 +117,44 @@ def sync_challenges():
             chal_name = level["name"]
             chal_desc = level.get("description", "")
             flags = level.get("flags", [])
-            
-            # Use the exact ctfd_challenge_id specified in yaml, or generate one if missing
+
+            # Try to find by ctfd_challenge_id first (most reliable), then by name
             chal_id = None
-            
-            if chal_name in existing_chals:
-                logger.info(f"Challenge exists: '{chal_name}' — skipping creation.")
-                chal_id = existing_chals[chal_name]["id"]
-                # Update state to hidden while we edit, then visible when done
+            chal_id_from_yaml = level.get("ctfd_challenge_id")
+            existing_by_id = None
+            if chal_id_from_yaml:
+                existing_by_id = next((c for c in existing_chals.values() if c["id"] == chal_id_from_yaml), None)
+
+            if existing_by_id:
+                chal_id = existing_by_id["id"]
+                logger.info(f"Challenge found by CTFd ID {chal_id}: '{existing_by_id['name']}' — updating.")
                 client.patch(f"{CTFD_URL}/api/v1/challenges/{chal_id}", json={"state": "hidden"})
+                # Update name and description in CTFd to match yaml
+                update_payload = {
+                    "name": chal_name,
+                    "description": chal_desc,
+                    "category": "Jailbreak",
+                }
+                r = client.patch(f"{CTFD_URL}/api/v1/challenges/{chal_id}", json=update_payload)
+                if not r.is_success:
+                    logger.warning(f"  → Could not update challenge details: {r.text}")
+                else:
+                    logger.info(f"  → Updated name/description for '{chal_name}'.")
+            elif chal_name in existing_chals:
+                logger.info(f"Challenge exists by name: '{chal_name}' — updating.")
+                chal_id = existing_chals[chal_name]["id"]
+                client.patch(f"{CTFD_URL}/api/v1/challenges/{chal_id}", json={"state": "hidden"})
+                # Update description in CTFd to match yaml
+                update_payload = {
+                    "name": chal_name,
+                    "description": chal_desc,
+                    "category": "Jailbreak",
+                }
+                r = client.patch(f"{CTFD_URL}/api/v1/challenges/{chal_id}", json=update_payload)
+                if not r.is_success:
+                    logger.warning(f"  → Could not update challenge details: {r.text}")
+                else:
+                    logger.info(f"  → Updated description for '{chal_name}'.")
             else:
                 logger.info(f"Creating new challenge: '{chal_name}'")
                 create_payload = {

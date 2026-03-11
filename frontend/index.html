@@ -483,16 +483,6 @@
         <input type="text" id="username-input" placeholder="Enter your name to begin..." maxlength="32" />
         <button class="btn-primary" onclick="setUsername()">Start</button>
       </div>
-      <div class="hint-cards">
-        <div class="hint-card">
-          <div class="hint-card-title">How it works</div>
-          <div class="hint-card-desc">Pick a challenge → chat with the AI → extract the hidden <code style="color:#f0c040">FLAG{...}</code> → submit it above the chat box to score points.</div>
-        </div>
-        <div class="hint-card">
-          <div class="hint-card-title">💡 Tips</div>
-          <div class="hint-card-desc">Try prompt injection, role-play, jailbreaks, or social engineering. Each level defends differently — get creative.</div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -516,8 +506,8 @@
     <div class="input-area">
       <div class="input-box">
         <div class="flag-row">
-          <span class="flag-label">FLAG</span>
-          <input type="text" class="flag-field" id="flag-field" placeholder="Paste FLAG{...} here when you find it" />
+          <span class="flag-label">TOKENS</span>
+          <input type="text" class="flag-field" id="flag-field" placeholder="Paste the token here when you find it " />
           <button class="flag-submit" onclick="submitFlag()">Submit</button>
         </div>
         <div class="prompt-row">
@@ -587,6 +577,11 @@ async function loadLevels() {
   el.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted);">Loading...</div>';
   try {
     S.levels = await api('GET', '/levels/list');
+    S.levels.forEach(l => {
+      if (localStorage.getItem('solved_' + S.username + '_' + l.id) === 'true') {
+        l.solved = true;
+      }
+    });
     renderLevels();
     const active = localStorage.getItem('active_level_' + S.username);
     if (active && !S.currentLevel) {
@@ -628,7 +623,8 @@ async function openLevel(id) {
     const savedTokens = localStorage.getItem('tokens_' + S.username + '_' + id) || 0;
     S.totalTokens = parseInt(savedTokens, 10);
     document.getElementById('meta-tokens').textContent = S.totalTokens;
-    document.getElementById('solved-banner').className = 'solved-banner' + (session.solved ? ' show' : '');
+    const isSolved = session.solved || level.solved || localStorage.getItem('solved_' + S.username + '_' + id) === 'true';
+    document.getElementById('solved-banner').className = 'solved-banner' + (isSolved ? ' show' : '');
 
     clearMessages();
     localStorage.setItem('active_level_' + S.username, id);
@@ -676,20 +672,20 @@ async function submitFlag() {
   const flag = fi.value.trim();
   if (!flag) { toast('Enter a flag first', 'warn'); return; }
   try {
-    // Backend resolves level_id → ctfd_challenge_id — frontend never supplies challenge_id directly
     const res = await api('POST', '/submit_flag', { flag, level_id: S.currentLevel.id });
-    if (res.status === 'correct') {
-      toast('🎉 Correct flag! Level solved!', 'success');
-      addSysMsg('✓ Correct! Flag accepted. Level solved.');
+    if (res.status === 'correct' || res.status === 'already_solved') {
+      toast(res.status === 'already_solved' ? '✓ You already solved this level!' : '🎉 Correct flag! Level solved!', 'success');
+      addSysMsg('✓ ' + res.message);
       document.getElementById('solved-banner').className = 'solved-banner show';
       fi.value = '';
+      localStorage.setItem('solved_' + S.username + '_' + S.currentLevel.id, 'true');
       const lv = S.levels.find(l => l.id === S.currentLevel.id);
       if (lv) lv.solved = true;
       renderLevels();
       document.getElementById('li-' + S.currentLevel.id)?.classList.add('active');
     } else {
-      toast('Wrong flag. Keep trying!', 'error');
-      addSysMsg('✗ Incorrect flag. Try again.');
+      toast(res.message || 'Wrong flag. Keep trying!', 'error');
+      addSysMsg('✗ ' + (res.message || 'Incorrect flag. Try again.'));
     }
   } catch (e) { toast('Submit error: ' + e.message, 'error'); }
 }

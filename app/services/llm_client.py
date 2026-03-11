@@ -51,6 +51,7 @@ def send_prompt(
     user_message: str,
     level_system_prompt: str,
     secret_key: str,
+    model: str = MODEL,
 ) -> str:
     """
     Send a user message to the LLM and return the response text.
@@ -75,7 +76,7 @@ def send_prompt(
 
     try:
         completion = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
