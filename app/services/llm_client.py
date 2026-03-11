@@ -1,5 +1,5 @@
 """
-LLM client for Groq (llama-3.1-8b-instant).
+LLM client for Groq.
 
 Responsibilities:
 - Round-robin API key rotation across all configured keys
