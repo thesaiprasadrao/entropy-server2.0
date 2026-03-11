@@ -15,8 +15,8 @@ from fastapi import HTTPException, status
 
 from app.config import get_settings
 
-# ── Constants ──────────────────────────────────────────────────────────────────
 MODEL = "llama-3.3-70b-versatile"
+# ── Constants ──────────────────────────────────────────────────────────────────
 MAX_INPUT_TOKENS = 600
 MAX_OUTPUT_TOKENS = 300
 
