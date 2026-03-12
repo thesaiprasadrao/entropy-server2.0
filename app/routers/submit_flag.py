@@ -1,3 +1,4 @@
+import hmac
 import logging
 import re
 
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.level import Level
+from app.models.user import User
+from app.models.user_level_state import UserLevelState
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +100,56 @@ def submit_flag(
 
     challenge_id = level.ctfd_challenge_id
 
-    # 2. Forward ALL incoming cookies so CTFd session authentication works
     cookies = dict(request.cookies)
     if not cookies:
-        logger.warning("submit_flag called with no cookies — user may not be logged into CTFd")
+        logger.warning("submit_flag called with no cookies — user not logged into CTFd")
         raise HTTPException(
             status_code=401,
-            detail="No CTFd session found. Please log in first.",
+            detail="You need to be logged in to submit a flag. Please log in at the main page.",
         )
+
+    # 2b. Validate flag locally against user's assigned flag first
+    # CTFd returns 'already_solved' for any submission after a correct one,
+    # regardless of whether the new submission is correct. We must gate on our
+    # own DB to avoid false positives.
+
+    # Look up username from CTFd session, then find their UserLevelState
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as me_client:
+            me_resp = me_client.get(
+                f"{CTFD_INTERNAL_URL}/api/v1/users/me",
+                cookies=cookies,
+            )
+        me_data = me_resp.json().get("data", {})
+        ctfd_username = me_data.get("name", "")
+    except Exception:
+        ctfd_username = ""
+
+    if ctfd_username:
+        user = db.query(User).filter(User.username == ctfd_username).first()
+        if user:
+            state = (
+                db.query(UserLevelState)
+                .filter(
+                    UserLevelState.user_id == user.id,
+                    UserLevelState.level_id == body.level_id,
+                )
+                .first()
+            )
+            if state and state.flag_value:
+                flag_correct = hmac.compare_digest(
+                    body.flag.strip().lower(),
+                    state.flag_value.strip().lower(),
+                )
+                if not flag_correct:
+                    logger.info(
+                        "Local flag check failed for user=%s level_id=%s",
+                        ctfd_username, body.level_id,
+                    )
+                    return SubmitFlagResponse(
+                        status="incorrect",
+                        message="Incorrect flag. Keep trying!",
+                    )
 
     # 3. Fetch CSRF nonce — CTFd requires this on every POST to its API
     nonce = get_ctfd_nonce(cookies)
@@ -153,10 +198,10 @@ def submit_flag(
             exc.response.text[:200],
         )
         if exc.response.status_code in (401, 403):
-            raise HTTPException(
-                status_code=401,
-                detail="CTFd rejected your session. Please log in at /ctfd/ again.",
-            )
+                raise HTTPException(
+                    status_code=401,
+                    detail="Your session has expired. Please log in again at the main page.",
+                )
         raise HTTPException(status_code=502, detail="CTFd rejected the request.")
 
     # 4. Parse CTFd response
