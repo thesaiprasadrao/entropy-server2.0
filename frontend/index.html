@@ -737,11 +737,13 @@ function insert(html) {
   const d = document.createElement('div');
   d.innerHTML = html;
   inner.insertBefore(d.firstElementChild, typing);
-  document.getElementById('messages-wrap').scrollTop = 9999;
+  const wrap = document.getElementById('messages-wrap');
+  wrap.scrollTop = wrap.scrollHeight;
 }
 function setTyping(on) {
   document.getElementById('typing-row').className = 'msg-row typing-row' + (on ? ' on' : '');
-  document.getElementById('messages-wrap').scrollTop = 9999;
+  const wrap = document.getElementById('messages-wrap');
+  wrap.scrollTop = wrap.scrollHeight;
 }
 function setSending(v) {
   document.getElementById('send-btn').disabled = v;

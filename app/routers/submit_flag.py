@@ -110,8 +110,9 @@ def submit_flag(
         )
 
     # 2b. Validate flag locally using username from request body.
-    # CTFd returns 'already_solved' for ANY submission after the first correct one,
-    # so we MUST verify against our own DB to avoid false positives.
+    # Our PostgreSQL DB is the source of truth for each user's assigned flag.
+    # We return the result directly here, bypassing CTFd's submission API
+    # (CTFd's cookie handling is unreliable across browsers/origins).
     if body.username:
         user = db.query(User).filter(User.username == body.username).first()
         if user:
@@ -129,12 +130,50 @@ def submit_flag(
                     state.flag_value.strip().lower(),
                 )
                 if not flag_correct:
-                    logger.info("Local flag check FAILED for user=%s level_id=%s", body.username, body.level_id)
+                    logger.info("Flag INCORRECT for user=%s level_id=%s", body.username, body.level_id)
                     return SubmitFlagResponse(
                         status="incorrect",
                         message="Incorrect flag. Keep trying!",
                     )
-                logger.info("Local flag check PASSED for user=%s level_id=%s", body.username, body.level_id)
+                # Flag is correct — mark solved in our DB
+                already_solved = state.solved
+                if not already_solved:
+                    state.solved = True
+                    db.commit()
+                logger.info("Flag CORRECT for user=%s level_id=%s", body.username, body.level_id)
+
+                # Also forward to CTFd so its scoreboard registers the solve.
+                # Only submit if not already solved (avoid duplicate CTFd submission).
+                if not already_solved and cookies:
+                    try:
+                        nonce = get_ctfd_nonce(cookies)
+                        ctfd_payload = {
+                            "challenge_id": challenge_id,
+                            "submission": body.flag,
+                        }
+                        ctfd_headers = {"Accept": "application/json"}
+                        if nonce:
+                            ctfd_payload["nonce"] = nonce
+                            ctfd_headers["CSRF-Token"] = nonce
+                        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+                            ctfd_resp = client.post(
+                                f"{CTFD_INTERNAL_URL}/api/v1/challenges/attempt",
+                                json=ctfd_payload,
+                                cookies=cookies,
+                                headers=ctfd_headers,
+                            )
+                        logger.info(
+                            "CTFd scoreboard sync for user=%s level_id=%s: HTTP %s",
+                            body.username, body.level_id, ctfd_resp.status_code,
+                        )
+                    except Exception as exc:
+                        # Non-fatal — local DB is source of truth; log and continue
+                        logger.warning("Failed to sync solve to CTFd scoreboard: %s", exc)
+
+                return SubmitFlagResponse(
+                    status="correct",
+                    message="Flag accepted! Level solved.",
+                )
 
 
     # 3. Fetch CSRF nonce — CTFd requires this on every POST to its API
