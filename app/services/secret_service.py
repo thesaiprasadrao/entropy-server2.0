@@ -18,14 +18,6 @@ def _generate_random_secret() -> str:
     return "".join(secrets.choice(_SECRET_ALPHABET) for _ in range(6))
 
 
-def _pick_flag(level: Level) -> str:
-    if level.flag_pool:
-        pool = [f.strip() for f in level.flag_pool.split(",") if f.strip()]
-        if pool:
-            return secrets.choice(pool)
-    return _generate_random_secret()
-
-
 def _stable_id_from_name(username: str) -> int:
     """Derive a stable positive int from a team name, within Postgres INTEGER range."""
     h = hashlib.sha256(username.lower().strip().encode()).hexdigest()
@@ -58,6 +50,28 @@ def get_or_create_user(db: Session, username: str) -> User:
     db.flush()
     return user
 
+def _get_unique_flag(db: Session, level: Level | None, level_id: int) -> str:
+    assigned_flags = {
+        row[0] for row in 
+        db.query(UserLevelState.flag_value)
+        .filter(UserLevelState.level_id == level_id)
+        .all()
+    }
+
+    if level and level.flag_pool:
+        pool = [f.strip() for f in level.flag_pool.split(",") if f.strip()]
+        if pool:
+            available_flags = list(set(pool) - assigned_flags)
+            if available_flags:
+                return secrets.choice(available_flags)
+            # If available_flags is empty, it means the pool is exhausted.
+            # We naturally fall through to random generation below.
+
+    # Fallback to random generation ensuring uniqueness
+    while True:
+        flag = _generate_random_secret()
+        if flag not in assigned_flags:
+            return flag
 
 def get_or_create_user_level_state(
     db: Session,
@@ -77,7 +91,8 @@ def get_or_create_user_level_state(
 
     if state is None:
         level = db.query(Level).filter(Level.id == level_id).first()
-        flag = _pick_flag(level) if level else _generate_random_secret()
+        flag = _get_unique_flag(db, level, level_id)
+        
         state = UserLevelState(
             user_id=user.id,
             level_id=level_id,
