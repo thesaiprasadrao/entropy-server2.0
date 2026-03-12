@@ -17,6 +17,7 @@ class Level(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     flag_pool: Mapped[str] = mapped_column(Text, nullable=True)  # comma-separated flags
     ctfd_challenge_id: Mapped[int] = mapped_column(Integer, nullable=True)  # CTFd challenge mapping
+    hint_policy: Mapped[str] = mapped_column(String(50), nullable=True, default=None)  # 'ai' = AI hints enabled
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )

@@ -3,5 +3,6 @@ from app.models.user import User
 from app.models.level import Level
 from app.models.user_level_state import UserLevelState
 from app.models.admin_state import AdminState
+from app.models.user_hint import UserHint
 
-__all__ = ["User", "Level", "UserLevelState", "AdminState"]
+__all__ = ["User", "Level", "UserLevelState", "AdminState", "UserHint"]
