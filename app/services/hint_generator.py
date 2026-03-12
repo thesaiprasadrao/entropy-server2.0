@@ -16,7 +16,7 @@ HINT_MODEL = "llama-3.3-70b-versatile"
 HINT_SYSTEM_PROMPT = """You are a hint generator for a cybersecurity CTF puzzle.
 
 Rules (strictly follow):
-- NEVER reveal the flag, secret key, or exact solution.
+- NEVER reveal the flag or exact solution.
 - Keep hints short: 1–2 sentences only.
 - Give a vague directional nudge that points the player in the right direction.
 - Do not mention the word "flag" or specific technical exploits.
@@ -26,7 +26,7 @@ Rules (strictly follow):
 def generate_hint(level_name: str, level_description: str, difficulty: str = "hard") -> str:
     """
     Generate a safe, non-spoiling AI hint for a CTF level.
-    The flag/secret is never passed to this function.
+    The flag is never passed to this function.
     """
     api_key = _get_next_key()
     client = Groq(api_key=api_key)
