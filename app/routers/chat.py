@@ -8,6 +8,7 @@ from app.models.user_level_state import UserLevelState
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.llm_client import send_prompt, _approx_token_count
 from app.middleware.rate_limiter import check_rate_limit
+from app.services.admin_state import get_state
 
 router = APIRouter(prefix="/levels", tags=["chat"])
 
@@ -24,6 +25,12 @@ def chat(
 ) -> ChatResponse:
     # 0. Rate limit — must be first, before any DB work
     check_rate_limit(body.username)
+
+    if get_state("pause_ai") == "true":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI temporarily paused"
+        )
 
     # 1. Level must exist
     level = db.query(Level).filter(Level.id == level_id).first()

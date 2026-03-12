@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, levels, chat, leaderboard, submit_flag
+from app.routers import health, levels, chat, leaderboard, submit_flag, admin
 from app.database import check_db_connection, SessionLocal, Base, engine
 import app.models  # noqa: F401 — ensures all models are registered with Base
 from app.services.levels_loader import seed_levels_from_config
@@ -28,12 +28,27 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+from app.services.admin_state import get_state
+
+@app.middleware("http")
+async def check_global_shutdown(request: Request, call_next):
+    if not request.url.path.startswith("/admin") and get_state("global_shutdown") == "true":
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "System is down for maintenance"}
+        )
+    return await call_next(request)
+
+
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(health.router)
 app.include_router(levels.router)
 app.include_router(chat.router)
 app.include_router(leaderboard.router)
 app.include_router(submit_flag.router)
+app.include_router(admin.router)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
