@@ -12,6 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    mem_limit: 1g
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
@@ -29,6 +30,7 @@ services:
       - ./app:/app/app:ro
     ports:
       - "8000:8000"
+    mem_limit: 2g
     depends_on:
       db:
         condition: service_healthy
@@ -57,6 +59,7 @@ services:
       - LOG_FOLDER=/var/ctfd/logs
       - WORKERS=1
       - REVERSE_PROXY=true
+    mem_limit: 1g
     volumes:
       - ./ctfd:/var/ctfd
     # No host port published — accessed only via nginx at /ctfd/
