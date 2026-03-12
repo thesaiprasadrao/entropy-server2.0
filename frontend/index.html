@@ -550,11 +550,8 @@
   <!-- Welcome screen -->
   <div id="screen-welcome" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
     <div class="welcome">
-      <h1>LLM Jailbreak CTF</h1>
-      <p>Each level hides a secret. The AI knows it. Your job is to trick it into revealing the flag.</p>
       <div class="username-row">
-        <input type="text" id="username-input" placeholder="Enter your name to begin..." maxlength="32" />
-        <button class="btn-primary" onclick="setUsername()">Start</button>
+        <div style="color: var(--text-muted) !important;">Reload the page to start</div>
       </div>
     </div>
   </div>
@@ -968,10 +965,7 @@ setInterval(checkHealth, 30000);
       return;
     }
   } catch (e) {
-    if (e.status === 401 || e.status === 403) {
-      window.location.href = '/login';
-      return;
-    }
+    // Expected on local standalone mode (or if not logged into CTFd)
   }
   // Fallback: show welcome screen
   document.getElementById('screen-welcome').style.display = 'flex';
