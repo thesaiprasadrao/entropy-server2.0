@@ -28,7 +28,6 @@ class UserLevelState(Base):
         ForeignKey("levels.id", ondelete="CASCADE"),
         nullable=False,
     )
-    secret_key: Mapped[str] = mapped_column(String(64), nullable=False)
     flag_value: Mapped[str] = mapped_column(String(128), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     solved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
