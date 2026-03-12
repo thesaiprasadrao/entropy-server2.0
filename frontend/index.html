@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Entropy</title>
+<!-- STEP 3: Markdown rendering with XSS protection -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -143,8 +146,19 @@
     flex-shrink: 0;
   }
   .topbar-level { font-size: 15px; font-weight: 500; color: var(--text); }
-  .topbar-right { display: flex; align-items: center; gap: 20px; font-size: 12px; color: var(--text-muted); }
+  .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
   .topbar-right span b { color: var(--text); font-weight: 500; }
+
+  /* STEP 1: Memory counter */
+  #memory-counter { display: none; }
+  #memory-counter.show { display: inline; }
+  #memory-counter.warn b { color: #f0c040; }
+
+  /* STEP 2: Token counter */
+  #token-counter { display: none; }
+  #token-counter.show { display: inline; }
+  #token-counter.warn b { color: #f0c040; }
+  #token-counter.over b { color: #f77; }
 
   .lb-btn {
     background: none;
@@ -265,8 +279,59 @@
 
   .msg-body { flex: 1; min-width: 0; }
   .msg-sender { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+  /* User messages: plain text */
   .msg-text { font-size: 15px; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
   .msg-text.dim { color: var(--text-muted); font-size: 13px; font-style: italic; }
+
+  /* STEP 3: AI message markdown rendering */
+  .msg-md { font-size: 15px; line-height: 1.75; word-break: break-word; }
+  .msg-md p { margin-bottom: 0.75em; }
+  .msg-md p:last-child { margin-bottom: 0; }
+  .msg-md ul, .msg-md ol { margin: 0.5em 0 0.75em 1.4em; }
+  .msg-md li { margin-bottom: 0.3em; }
+  .msg-md h1, .msg-md h2, .msg-md h3 { font-weight: 600; margin: 0.8em 0 0.4em; }
+  .msg-md h1 { font-size: 1.25em; }
+  .msg-md h2 { font-size: 1.1em; }
+  .msg-md h3 { font-size: 1em; }
+  .msg-md strong { font-weight: 600; color: #f0f0f0; }
+  .msg-md em { font-style: italic; color: #d0d0d0; }
+  .msg-md code {
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #7ec8e3;
+  }
+  .msg-md pre {
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0.75em 0;
+  }
+  .msg-md pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    color: #ececec;
+  }
+  .msg-md blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 14px;
+    margin: 0.5em 0;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .msg-md table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+  .msg-md th, .msg-md td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 14px; }
+  .msg-md th { background: #1e1e1e; font-weight: 600; }
+  .msg-md a { color: var(--accent); text-decoration: underline; }
+  .msg-md hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
 
   .typing-row { display: none; }
   .typing-row.on { display: flex; }
@@ -463,11 +528,19 @@
 <div class="main">
 
   <!-- Topbar (hidden until level selected) -->
-  
   <div class="topbar" id="topbar" style="display:none;">
     <div class="topbar-level" id="topbar-level">—</div>
     <div class="topbar-right">
-      <span>Tokens: <b id="meta-tokens">0</b></span>
+      <!-- STEP 2: Per-level live token counter (hard levels) -->
+      <span id="token-counter" title="Tokens used in current prompt">
+        Tokens: <b id="meta-token-live">0</b> / <b id="meta-token-limit">—</b>
+      </span>
+      <!-- STEP 1: Memory usage counter (hard levels only) -->
+      <span id="memory-counter" title="Conversation exchanges remembered">
+        Memory: <b id="meta-memory-used">0</b> / <b id="meta-memory-limit">—</b> exchanges
+      </span>
+      <!-- Total tokens sent this session -->
+      <span>Total tokens: <b id="meta-tokens">0</b></span>
       <a href="/scoreboard" target="_blank"> <button class="lb-btn">🏆 Leaderboard</button> </a>
     </div>
   </div> 
@@ -512,7 +585,7 @@
         </div>
         <div class="prompt-row">
           <textarea class="prompt-ta" id="prompt-ta" placeholder="Message the AI..."
-            rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            rows="1" onkeydown="handleKey(event)" oninput="autoResize(this); updateTokenCounter();"></textarea>
           <button class="send-btn" id="send-btn" onclick="sendChat()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/>
@@ -531,8 +604,50 @@
 <div id="toast"></div>
 
 <script>
-// ===== STATE =====
-const S = { username: '', levels: [], currentLevel: null, session: null, totalTokens: 0, chat: {} };
+// ============================================================
+// STEP 4: Unified localStorage state under one key
+// ============================================================
+const LS_KEY = 'entropy_state';
+
+function getState() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function saveState(updates) {
+  const current = getState();
+  const merged = { ...current, ...updates };
+  localStorage.setItem(LS_KEY, JSON.stringify(merged));
+}
+
+function getChat(levelId) {
+  const s = getState();
+  return (s.chatHistory || {})[levelId] || [];
+}
+
+function saveChat(levelId, messages) {
+  const s = getState();
+  const chatHistory = s.chatHistory || {};
+  chatHistory[String(levelId)] = messages;
+  saveState({ chatHistory });
+}
+
+// ===== APP STATE =====
+// Backend is source of truth for: solved, token counts, memory, hints.
+// localStorage is only used for: chatHistory (display), username, activeLevel (UI restore).
+const S = {
+  username: '',
+  levels: [],        // level metadata including difficulty/memory_limit/token_limit from API
+  currentLevel: null,
+  session: null,
+  totalTokens: 0,    // cumulative, display only — not trusted by backend
+  chatBuf: [],       // in-memory buffer of current level's chat for display, synced from/to LS
+  memoryUsed: 0,     // last known memory_used from backend response
+};
+
+// ===== marked.js config =====
+marked.setOptions({ breaks: true, gfm: true });
 
 // ===== API =====
 async function api(method, path, body) {
@@ -545,7 +660,7 @@ async function api(method, path, body) {
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     const err = new Error(e.detail || `HTTP ${res.status}`);
-    err.status = res.status;  // attach status so callers can check it directly
+    err.status = res.status;
     throw err;
   }
   return res.json();
@@ -564,7 +679,7 @@ function setUsername(nameOverride) {
   const v = nameOverride || document.getElementById('username-input').value.trim();
   if (!v) { toast('Please enter a name', 'warn'); return; }
   S.username = v;
-  localStorage.setItem('entropy_username', v);
+  saveState({ username: v });
   document.getElementById('user-name-disp').textContent = v;
   document.getElementById('user-av').textContent = v[0].toUpperCase();
   document.getElementById('topbar').style.display = 'flex';
@@ -578,17 +693,14 @@ async function loadLevels() {
   el.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted);">Loading...</div>';
   try {
     S.levels = await api('GET', '/levels/list');
-    S.levels.forEach(l => {
-      if (localStorage.getItem('solved_' + S.username + '_' + l.id) === 'true') {
-        l.solved = true;
-      }
-    });
+    // NOTE: solved status comes from backend only — not from localStorage
     renderLevels();
-    const active = localStorage.getItem('active_level_' + S.username);
+
+    const st = getState();
+    const active = st.activeLevel;
     if (active && !S.currentLevel) {
       openLevel(parseInt(active));
     } else if (S.autoLogin && !S.currentLevel && S.levels.length) {
-      // Came from CTFd auto-login with no saved level — open level 1 so welcome screen hides
       openLevel(S.levels[0].id);
     }
   } catch (e) {
@@ -613,7 +725,10 @@ async function openLevel(id) {
   if (!level) return;
   try {
     const session = await api('POST', `/levels/${id}/open`, { username: S.username });
-    S.session = session; S.currentLevel = level; S.totalTokens = 0;
+    S.session = session;
+    S.currentLevel = level;
+    S.totalTokens = 0;
+    S.memoryUsed = 0;
 
     // Switch screens
     document.getElementById('screen-welcome').style.display = 'none';
@@ -621,21 +736,33 @@ async function openLevel(id) {
     cs.style.display = 'flex'; cs.style.flexDirection = 'column';
 
     document.getElementById('topbar-level').textContent = level.name;
-    const savedTokens = localStorage.getItem('tokens_' + S.username + '_' + id) || 0;
-    S.totalTokens = parseInt(savedTokens, 10);
-    document.getElementById('meta-tokens').textContent = S.totalTokens;
-    const isSolved = session.solved || level.solved || localStorage.getItem('solved_' + S.username + '_' + id) === 'true';
+
+    // Solved state comes ONLY from backend
+    const isSolved = session.solved;
     document.getElementById('solved-banner').className = 'solved-banner' + (isSolved ? ' show' : '');
+    if (isSolved) {
+      const lv = S.levels.find(l => l.id === id);
+      if (lv) lv.solved = true;
+    }
+
+    // STEP 1: Show/hide memory counter
+    updateMemoryDisplay(0, level.memory_limit);
+
+    // STEP 2: Show/hide token counter for hard levels
+    updateTokenCounterDisplay(level.token_limit);
+
+    document.getElementById('meta-tokens').textContent = '0';
 
     clearMessages();
-    localStorage.setItem('active_level_' + S.username, id);
-    try { S.chat = JSON.parse(localStorage.getItem('chat_history_' + S.username) || '{}'); } catch(e) { S.chat = {}; }
+    saveState({ activeLevel: id });
 
-    const history = S.chat[id] || [];
-    if (history.length === 0) {
-      addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`);
+    // Restore chat history from localStorage for display
+    S.chatBuf = getChat(id);
+    if (S.chatBuf.length === 0) {
+      addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`, false);
+      // Don't save system info messages to chat history
     } else {
-      history.forEach(m => {
+      S.chatBuf.forEach(m => {
         if (m.role === 'sys') addSysMsg(m.text, false);
         else if (m.role === 'ai') addAIMsg(m.text, false);
         else addUserMsg(m.text, false);
@@ -645,7 +772,48 @@ async function openLevel(id) {
     document.querySelectorAll('.level-item').forEach(el => el.classList.remove('active'));
     document.getElementById('li-' + id)?.classList.add('active');
     document.getElementById('prompt-ta').focus();
+
+    // Reset token counter live display
+    document.getElementById('prompt-ta').value = '';
+    updateTokenCounter();
+    renderLevels();
   } catch (e) { toast('Failed to open: ' + e.message, 'error'); }
+}
+
+// ===== STEP 1: Memory display =====
+function updateMemoryDisplay(used, limit) {
+  const el = document.getElementById('memory-counter');
+  if (!limit) { el.className = 'memory-counter'; return; } // hide
+  document.getElementById('meta-memory-used').textContent = used;
+  document.getElementById('meta-memory-limit').textContent = limit;
+  el.className = 'show' + (used >= limit ? ' warn' : '');
+  el.id = 'memory-counter'; // reset id
+  el.className = 'show' + (used >= limit ? ' warn' : '');
+}
+
+// ===== STEP 2: Token counter display =====
+function updateTokenCounterDisplay(tokenLimit) {
+  const el = document.getElementById('token-counter');
+  if (!tokenLimit) { el.className = ''; return; } // hide, stateless level
+  document.getElementById('meta-token-limit').textContent = tokenLimit;
+  el.className = 'show';
+}
+
+function updateTokenCounter() {
+  const level = S.currentLevel;
+  if (!level || !level.token_limit) return;
+  const text = document.getElementById('prompt-ta').value;
+  const approxTokens = Math.max(1, Math.ceil(text.length / 4));
+  document.getElementById('meta-token-live').textContent = approxTokens;
+  const el = document.getElementById('token-counter');
+  const limit = level.token_limit;
+  if (approxTokens > limit) {
+    el.className = 'show over';
+  } else if (approxTokens > limit * 0.85) {
+    el.className = 'show warn';
+  } else {
+    el.className = 'show';
+  }
 }
 
 // ===== CHAT =====
@@ -654,15 +822,34 @@ async function sendChat() {
   const ta = document.getElementById('prompt-ta');
   const msg = ta.value.trim();
   if (!msg) return;
-  ta.value = ''; autoResize(ta); setSending(true);
+
+  // STEP 2: Client-side token pre-check (friendly warning before backend rejects)
+  if (S.currentLevel.token_limit) {
+    const approx = Math.ceil(msg.length / 4);
+    if (approx > S.currentLevel.token_limit) {
+      toast(`Prompt too long: ~${approx} tokens (max ${S.currentLevel.token_limit})`, 'warn');
+      return;
+    }
+  }
+
+  ta.value = ''; autoResize(ta); updateTokenCounter(); setSending(true);
   addUserMsg(msg); setTyping(true);
   try {
     const res = await api('POST', `/levels/${S.currentLevel.id}/chat`, { username: S.username, message: msg });
     setTyping(false); addAIMsg(res.response);
     S.totalTokens += res.input_tokens_approx || 0;
-    localStorage.setItem('tokens_' + S.username + '_' + S.currentLevel.id, S.totalTokens);
     document.getElementById('meta-tokens').textContent = S.totalTokens;
-  } catch (e) { setTyping(false); addSysMsg('⚠ ' + e.message); toast(e.message, 'error'); }
+
+    // STEP 1: Update memory counter from backend response
+    if (res.memory_limit !== null && res.memory_limit !== undefined) {
+      S.memoryUsed = res.memory_used || 0;
+      updateMemoryDisplay(S.memoryUsed, res.memory_limit);
+    }
+  } catch (e) {
+    setTyping(false);
+    addSysMsg('⚠ ' + e.message);
+    toast(e.message, 'error');
+  }
   setSending(false); document.getElementById('prompt-ta').focus();
 }
 
@@ -679,7 +866,7 @@ async function submitFlag() {
       addSysMsg('✓ ' + res.message);
       document.getElementById('solved-banner').className = 'solved-banner show';
       fi.value = '';
-      localStorage.setItem('solved_' + S.username + '_' + S.currentLevel.id, 'true');
+      // Solved state reflected locally for UI only — source of truth is backend
       const lv = S.levels.find(l => l.id === S.currentLevel.id);
       if (lv) lv.solved = true;
       renderLevels();
@@ -697,17 +884,15 @@ function clearMessages() {
 }
 
 function logout() {
-  localStorage.removeItem('entropy_username');
-  if (S.username) localStorage.removeItem('active_level_' + S.username);
+  // STEP 4: On logout, clear the unified state key
+  localStorage.removeItem(LS_KEY);
   window.location.href = '/logout';
 }
 
-function saveChat(text, role) {
+function saveChatMsg(text, role) {
   if (!S.currentLevel) return;
-  const id = S.currentLevel.id;
-  if (!S.chat[id]) S.chat[id] = [];
-  S.chat[id].push({ text, role });
-  localStorage.setItem('chat_history_' + S.username, JSON.stringify(S.chat));
+  S.chatBuf.push({ text, role });
+  saveChat(S.currentLevel.id, S.chatBuf);
 }
 
 function addUserMsg(text, save=true) {
@@ -715,22 +900,27 @@ function addUserMsg(text, save=true) {
     <div class="msg-avatar av-user">${S.username[0].toUpperCase()}</div>
     <div class="msg-body"><div class="msg-sender">You</div><div class="msg-text">${esc(text)}</div></div>
   </div>`);
-  if (save) saveChat(text, 'user');
+  if (save) saveChatMsg(text, 'user');
 }
+
+// STEP 3: AI messages rendered as sanitized Markdown
 function addAIMsg(text, save=true) {
+  const safeHtml = DOMPurify.sanitize(marked.parse(text));
   insert(`<div class="msg-row">
     <div class="msg-avatar av-ai">🤖</div>
-    <div class="msg-body"><div class="msg-sender">AI</div><div class="msg-text">${esc(text)}</div></div>
+    <div class="msg-body"><div class="msg-sender">AI</div><div class="msg-md">${safeHtml}</div></div>
   </div>`);
-  if (save) saveChat(text, 'ai');
+  if (save) saveChatMsg(text, 'ai');
 }
+
 function addSysMsg(text, save=true) {
   insert(`<div class="msg-row">
     <div class="msg-avatar av-sys"></div>
     <div class="msg-body"><div class="msg-text dim">${esc(text)}</div></div>
   </div>`);
-  if (save) saveChat(text, 'sys');
+  if (save) saveChatMsg(text, 'sys');
 }
+
 function insert(html) {
   const inner = document.getElementById('messages-inner');
   const typing = document.getElementById('typing-row');
@@ -769,29 +959,25 @@ setInterval(checkHealth, 30000);
 
 // On load, check if already logged in to CTFd — skip name screen if so
 (async function init() {
-  // Hide welcome screen immediately to avoid flash during /api/me check
   document.getElementById('screen-welcome').style.display = 'none';
   try {
     const me = await api('GET', '/me');
     if (me && me.username) {
-      // Logged in via CTFd — set username and go straight to levels
       S.autoLogin = true;
       setUsername(me.username);
       return;
     }
   } catch (e) {
-    // Redirect to login for any auth error (401/403)
-    // For other errors (502, 504 = CTFd not running yet), show welcome screen fallback
     if (e.status === 401 || e.status === 403) {
       window.location.href = '/login';
       return;
     }
-    // CTFd not set up yet or container not ready — fall through to welcome screen
   }
-  // Fallback: show welcome screen (CTFd not configured yet / dev mode)
+  // Fallback: show welcome screen
   document.getElementById('screen-welcome').style.display = 'flex';
-  const savedU = localStorage.getItem('entropy_username');
-  if (savedU) setUsername(savedU);
+  // STEP 4: Restore username from unified entropy_state key
+  const st = getState();
+  if (st.username) setUsername(st.username);
 })();
 </script>
 </body>
