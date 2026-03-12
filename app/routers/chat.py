@@ -85,7 +85,7 @@ def chat(
     llm_response = send_prompt(
         user_message=body.message,
         level_system_prompt=level.system_prompt,
-        secret_key=state.secret_key,
+        flag_value=state.flag_value,
         model=level.model,
         conversation_history=conversation_history,
         token_limit=token_limit,

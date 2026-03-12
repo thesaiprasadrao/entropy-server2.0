@@ -8,7 +8,6 @@ class OpenLevelRequest(BaseModel):
 class OpenLevelResponse(BaseModel):
     user_id: str
     level_id: int
-    secret_key: str
     flag_value: str
     attempts: int
     solved: bool

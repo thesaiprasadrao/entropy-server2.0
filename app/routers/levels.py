@@ -10,8 +10,7 @@ from app.schemas.level import (
     SubmitFlagRequest,
     SubmitFlagResponse,
 )
-from app.services.secret_service import get_or_create_user_level_state
-from app.services.flag_service import validate_flag
+from app.services.flag_service import get_or_create_user_level_state, validate_flag
 
 router = APIRouter(prefix="/levels", tags=["levels"])
 
@@ -71,7 +70,6 @@ def open_level(
     return OpenLevelResponse(
         user_id=str(state.user_id),
         level_id=state.level_id,
-        secret_key=state.secret_key,
         flag_value=state.flag_value,
         attempts=state.attempts,
         solved=state.solved,
