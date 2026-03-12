@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, levels, chat, leaderboard, submit_flag, admin
+from app.routers import health, levels, chat, leaderboard, submit_flag, admin, hints
 from app.database import check_db_connection, SessionLocal, Base, engine
 import app.models  # noqa: F401 — ensures all models are registered with Base
 from app.services.levels_loader import seed_levels_from_config
@@ -49,6 +49,7 @@ app.include_router(chat.router)
 app.include_router(leaderboard.router)
 app.include_router(submit_flag.router)
 app.include_router(admin.router)
+app.include_router(hints.router)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
