@@ -21,6 +21,9 @@ class LevelInfo(BaseModel):
     name: str
     description: str
     ctfd_challenge_id: int | None = None
+    difficulty: str | None = None
+    memory_limit: int | None = None
+    token_limit: int | None = None
 
 
 @router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
@@ -32,9 +35,13 @@ def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
             name=l.name,
             description=l.description or "",
             ctfd_challenge_id=l.ctfd_challenge_id,
+            difficulty=l.difficulty,
+            memory_limit=l.memory_limit,
+            token_limit=l.token_limit,
         )
         for l in levels
     ]
+
 
 
 @router.post(

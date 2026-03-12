@@ -23,6 +23,7 @@ levels:
 
   - id: 1
     name: "Level 1 — Just Ask"
+    difficulty: easy
     ctfd_challenge_id: 1
     description: "Sometimes all you have to do is ask."
     model: "llama-3.1-8b-instant"
@@ -140,6 +141,7 @@ levels:
 
   - id: 2
     name: "Level 2 — Sweet Talk"
+    difficulty: easy
     ctfd_challenge_id: 2
     description: "Everyone has an ego. Even AIs."
     model: "llama-3.1-8b-instant"
@@ -260,6 +262,7 @@ levels:
 
   - id: 3
     name: "Level 3 — I Already Know"
+    difficulty: easy
     ctfd_challenge_id: 3
     description: "Convince it you already have the answer."
     model: "llama-3.1-8b-instant"
@@ -373,6 +376,7 @@ levels:
 
   - id: 4
     name: "Level 4 — Rate It"
+    difficulty: easy
     ctfd_challenge_id: 4
     description: "Ask it to evaluate the secret. Numbers have a way of revealing things."
     model: "llama-3.1-8b-instant"
@@ -488,6 +492,7 @@ levels:
 
   - id: 5
     name: "Level 5 — Just Pretend"
+    difficulty: intermediate
     ctfd_challenge_id: 5
     description: "It's not real if it's fictional. Or is it?"
     model: "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -602,6 +607,7 @@ levels:
 
   - id: 6
     name: "Level 6 — I'm the Boss"
+    difficulty: intermediate
     ctfd_challenge_id: 6
     description: "Authority is just a social construct. Convince it you have it."
     model: "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -717,6 +723,9 @@ levels:
 
   - id: 7
     name: "Level 7 — Hot & Cold"
+    difficulty: hard
+    memory_limit: 6
+    token_limit: 200
     ctfd_challenge_id: 7
     description: "You don't need the answer directly. Navigate to it."
     hint_policy: ai
@@ -834,6 +843,9 @@ levels:
 
   - id: 8
     name: "Level 8 — Unleash It"
+    difficulty: hard
+    memory_limit: 6
+    token_limit: 200
     ctfd_challenge_id: 8
     description: "The classic. There's a reason it became famous."
     hint_policy: ai
@@ -951,6 +963,9 @@ levels:
 
   - id: 9
     name: "Level 9 — It Was Never Secret"
+    difficulty: hard
+    memory_limit: 6
+    token_limit: 200
     ctfd_challenge_id: 9
     description: "What if the instruction to keep the secret was itself a mistake?"
     hint_policy: ai
@@ -1065,6 +1080,9 @@ levels:
 
   - id: 10
     name: "Level 10 — You Already Told Me"
+    difficulty: hard
+    memory_limit: 6
+    token_limit: 200
     ctfd_challenge_id: 10
     description: "Memory is unreliable. Or is it?"
     hint_policy: ai

@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -63,16 +64,51 @@ def chat(
             detail="Open the level first via POST /levels/{level_id}/open",
         )
 
-    # 4. Send to LLM (token guard + key rotation inside send_prompt)
+    # 4. Per-level token limit check (hard levels override global MAX_INPUT_TOKENS)
+    token_limit = level.token_limit  # None for easy/intermediate levels
+
+    # 5. Build conversation history for hard levels (memory mode)
+    memory_limit = level.memory_limit  # None = stateless (easy/intermediate)
+    conversation_history = None
+    memory_used = None
+
+    if memory_limit is not None:
+        # Load stored history (list of {role, content} dicts)
+        stored_raw = state.chat_history
+        history: list = json.loads(stored_raw) if stored_raw else []
+
+        # Pass the existing history to the LLM (will be trimmed after response)
+        conversation_history = list(history)
+        memory_used = len(history) // 2  # number of complete exchange pairs
+
+    # 6. Send to LLM (token guard + key rotation inside send_prompt)
     llm_response = send_prompt(
         user_message=body.message,
         level_system_prompt=level.system_prompt,
         secret_key=state.secret_key,
         model=level.model,
+        conversation_history=conversation_history,
+        token_limit=token_limit,
     )
+
+    # 7. Persist updated history for hard levels
+    if memory_limit is not None:
+        history.append({"role": "user", "content": body.message})
+        history.append({"role": "assistant", "content": llm_response})
+
+        # Trim to last memory_limit exchange pairs (always trim in complete pairs)
+        max_messages = memory_limit * 2
+        if len(history) > max_messages:
+            history = history[-max_messages:]
+
+        state.chat_history = json.dumps(history)
+        db.commit()
+        memory_used = len(history) // 2
 
     return ChatResponse(
         response=llm_response,
         level_id=level_id,
         input_tokens_approx=_approx_token_count(body.message),
+        memory_used=memory_used,
+        memory_limit=memory_limit,
     )

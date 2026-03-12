@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Integer, String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,6 +19,9 @@ class Level(Base):
     flag_pool: Mapped[str] = mapped_column(Text, nullable=True)  # comma-separated flags
     ctfd_challenge_id: Mapped[int] = mapped_column(Integer, nullable=True)  # CTFd challenge mapping
     hint_policy: Mapped[str] = mapped_column(String(50), nullable=True, default=None)  # 'ai' = AI hints enabled
+    difficulty: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)  # easy/intermediate/hard
+    memory_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max exchange pairs for hard levels
+    token_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max tokens per prompt for hard levels
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )
