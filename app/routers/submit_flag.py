@@ -1,6 +1,8 @@
 import hmac
 import logging
+import os
 import re
+from functools import lru_cache
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +20,125 @@ router = APIRouter(tags=["flags"])
 
 CTFD_INTERNAL_URL = "http://ctfd:8000"
 REQUEST_TIMEOUT = 5.0  # seconds
+CTFD_ADMIN_EMAIL = os.getenv("CTFD_ADMIN_EMAIL", "")
+CTFD_ADMIN_PASSWORD = os.getenv("CTFD_ADMIN_PASSWORD", "")
+
+
+@lru_cache(maxsize=1)
+def _get_admin_session_cookies() -> dict:
+    """Log in to CTFd as admin and return the session cookie dict (cached)."""
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            r = client.get(f"{CTFD_INTERNAL_URL}/login")
+            match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
+            nonce = match.group(1) if match else ""
+            r = client.post(
+                f"{CTFD_INTERNAL_URL}/login",
+                data={"name": CTFD_ADMIN_EMAIL, "password": CTFD_ADMIN_PASSWORD, "nonce": nonce},
+                follow_redirects=True,
+            )
+            if r.status_code >= 400 or "Incorrect" in r.text:
+                logger.warning("CTFd admin login failed — scoreboard sync disabled.")
+                return {}
+            return dict(client.cookies)
+    except Exception as exc:
+        logger.warning("CTFd admin login error: %s", exc)
+        return {}
+
+
+def _get_admin_nonce(cookies: dict) -> str:
+    """Fetch a fresh CSRF nonce from CTFd using admin session cookies."""
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            r = client.get(f"{CTFD_INTERNAL_URL}/", cookies=cookies)
+            match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
+            if match:
+                return match.group(1)
+    except Exception as exc:
+        logger.warning("Failed to fetch admin nonce: %s", exc)
+    return ""
+
+
+def _lookup_ctfd_user_id_by_name(username: str, cookies: dict) -> int | None:
+    """Look up CTFd's real sequential integer user ID by username.
+    Postgres stores a different ctf_user_id that is NOT CTFd's PK.
+    """
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            resp = client.get(
+                f"{CTFD_INTERNAL_URL}/api/v1/users",
+                params={"q": username, "field": "name"},
+                cookies=cookies,
+            )
+        if resp.status_code == 200:
+            for u in resp.json().get("data", []):
+                if u.get("name", "").lower() == username.lower():
+                    return u["id"]
+    except Exception as exc:
+        logger.warning("CTFd user lookup error for '%s': %s", username, exc)
+    return None
+
+
+def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) -> None:
+    """Submit a correct solve to CTFd via the admin /api/v1/submissions endpoint.
+    Looks up CTFd's real sequential user ID by username so team_id is recorded correctly.
+    """
+    if not CTFD_ADMIN_EMAIL or not CTFD_ADMIN_PASSWORD:
+        logger.warning("CTFD_ADMIN_EMAIL/PASSWORD not set — skipping admin sync.")
+        return
+    try:
+        # Get cached admin session (re-login if cookies are empty)
+        cookies = _get_admin_session_cookies()
+        if not cookies:
+            _get_admin_session_cookies.cache_clear()
+            cookies = _get_admin_session_cookies()
+        if not cookies:
+            logger.warning("Could not obtain admin session for CTFd sync.")
+            return
+
+        # Look up CTFd's real sequential user ID (NOT Postgres ctf_user_id)
+        ctfd_real_id = _lookup_ctfd_user_id_by_name(username, cookies)
+        if ctfd_real_id is None:
+            logger.warning(
+                "CTFd user '%s' not found — skipping scoreboard sync.", username
+            )
+            return
+
+        nonce = _get_admin_nonce(cookies)
+        payload = {
+            "challenge_id": challenge_id,
+            "user_id": ctfd_real_id,
+            "type": "correct",
+            "provided": flag_value,
+        }
+        headers = {"CSRF-Token": nonce, "Accept": "application/json"}
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            resp = client.post(
+                f"{CTFD_INTERNAL_URL}/api/v1/submissions",
+                json=payload,
+                cookies=cookies,
+                headers=headers,
+            )
+        if resp.status_code in (200, 201):
+            logger.info(
+                "CTFd admin sync OK: user=%s (ctfd_id=%s) challenge_id=%s",
+                username, ctfd_real_id, challenge_id,
+            )
+        elif resp.status_code == 400:
+            logger.info(
+                "CTFd admin sync: already recorded (user=%s challenge_id=%s)",
+                username, challenge_id,
+            )
+        else:
+            logger.warning(
+                "CTFd admin sync unexpected HTTP %s: %s",
+                resp.status_code, resp.text[:200],
+            )
+            # If 401/403 the cached session expired — clear and retry next time
+            if resp.status_code in (401, 403):
+                _get_admin_session_cookies.cache_clear()
+    except Exception as exc:
+        logger.warning("CTFd admin sync error: %s", exc)
 
 
 class MeResponse(BaseModel):
@@ -142,33 +263,15 @@ def submit_flag(
                     db.commit()
                 logger.info("Flag CORRECT for user=%s level_id=%s", body.username, body.level_id)
 
-                # Also forward to CTFd so its scoreboard registers the solve.
-                # Only submit if not already solved (avoid duplicate CTFd submission).
-                if not already_solved and cookies:
-                    try:
-                        nonce = get_ctfd_nonce(cookies)
-                        ctfd_payload = {
-                            "challenge_id": challenge_id,
-                            "submission": body.flag,
-                        }
-                        ctfd_headers = {"Accept": "application/json"}
-                        if nonce:
-                            ctfd_payload["nonce"] = nonce
-                            ctfd_headers["CSRF-Token"] = nonce
-                        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-                            ctfd_resp = client.post(
-                                f"{CTFD_INTERNAL_URL}/api/v1/challenges/attempt",
-                                json=ctfd_payload,
-                                cookies=cookies,
-                                headers=ctfd_headers,
-                            )
-                        logger.info(
-                            "CTFd scoreboard sync for user=%s level_id=%s: HTTP %s",
-                            body.username, body.level_id, ctfd_resp.status_code,
-                        )
-                    except Exception as exc:
-                        # Non-fatal — local DB is source of truth; log and continue
-                        logger.warning("Failed to sync solve to CTFd scoreboard: %s", exc)
+                # Also forward to CTFd via admin API so the scoreboard registers
+                # the solve with the correct team_id (cookie-based submission loses
+                # team association, causing team names not to appear on the scoreboard).
+                if not already_solved:
+                    sync_solve_to_ctfd_admin(
+                        username=user.username,
+                        challenge_id=challenge_id,
+                        flag_value=state.flag_value,
+                    )
 
                 return SubmitFlagResponse(
                     status="correct",

@@ -1,19 +1,19 @@
 """
-One-time script: sync all solved UserLevelState rows → CTFd scoreboard.
+Sync all solved UserLevelState rows in Postgres → CTFd scoreboard.
 
 Run inside the backend container:
     docker compose exec backend python -m app.scripts.sync_solves_to_ctfd
 
-It logs in to CTFd as each user (using a generated session) and submits
-the correct flag so CTFd records the solve on its scoreboard.
-
-Since individual user passwords are not stored, we use the CTFd admin API
-to look up CTFd user IDs and POST the solve on their behalf via the
-/api/v1/submissions admin endpoint.
+Uses the CTFd admin API to:
+  1. Look up the CTFd internal user ID by username (because Postgres stores a
+     different ctf_user_id that is NOT CTFd's sequential integer PK).
+  2. Check whether the solve already exists (to avoid duplicate‑solve 500s).
+  3. POST to /api/v1/submissions to record the solve with the correct team_id.
 """
 
 import logging
 import os
+import re
 import sys
 
 import httpx
@@ -35,11 +35,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ctf_user:ctf_password@db/
 TIMEOUT = 10.0
 
 
-def get_admin_token(client: httpx.Client) -> str:
-    """Log in as admin and return the session cookie jar (already set on client)."""
-    # Get nonce first
+def admin_login(client: httpx.Client) -> str:
+    """Log in as admin; returns fresh CSRF nonce. Session cookies stored on client."""
     r = client.get(f"{CTFD_URL}/login", follow_redirects=True)
-    import re
     match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
     nonce = match.group(1) if match else ""
 
@@ -48,19 +46,41 @@ def get_admin_token(client: httpx.Client) -> str:
         data={"name": CTFD_ADMIN_EMAIL, "password": CTFD_ADMIN_PASSWORD, "nonce": nonce},
         follow_redirects=True,
     )
-    if "Incorrect" in r.text or r.status_code >= 400:
+    if r.status_code >= 400 or "Incorrect" in r.text:
         logger.error("Admin login failed (HTTP %s)", r.status_code)
         sys.exit(1)
     logger.info("Logged in to CTFd as admin.")
-    return nonce
+
+    # Grab a fresh nonce from the home page for use in API calls
+    r = client.get(f"{CTFD_URL}/")
+    match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
+    return match.group(1) if match else ""
 
 
-def get_ctfd_user_id(client: httpx.Client, ctf_user_id: int) -> int | None:
-    """Look up a CTFd user by their CTFd numeric ID."""
-    r = client.get(f"{CTFD_URL}/api/v1/users/{ctf_user_id}")
-    if r.status_code == 200:
-        return r.json().get("data", {}).get("id")
+def get_ctfd_user_id_by_name(client: httpx.Client, username: str) -> int | None:
+    """
+    Look up CTFd's internal sequential user ID by username.
+    Postgres stores ctf_user_id which is NOT the same as CTFd's integer PK.
+    """
+    r = client.get(f"{CTFD_URL}/api/v1/users", params={"q": username, "field": "name"})
+    if r.status_code != 200:
+        return None
+    results = r.json().get("data", [])
+    for u in results:
+        if u.get("name", "").lower() == username.lower():
+            return u["id"]
     return None
+
+
+def solve_already_in_ctfd(client: httpx.Client, ctfd_user_id: int, challenge_id: int) -> bool:
+    """Return True if CTFd already has a correct solve for this user+challenge."""
+    r = client.get(
+        f"{CTFD_URL}/api/v1/submissions",
+        params={"user_id": ctfd_user_id, "challenge_id": challenge_id, "type": "correct"},
+    )
+    if r.status_code != 200:
+        return False
+    return len(r.json().get("data", [])) > 0
 
 
 def sync():
@@ -68,7 +88,7 @@ def sync():
     Session = sessionmaker(bind=engine)
     db = Session()
 
-    # Fetch all solved states
+    # Fetch all solved states joined with user and level
     rows = (
         db.query(UserLevelState, User, Level)
         .join(User, User.id == UserLevelState.user_id)
@@ -84,34 +104,37 @@ def sync():
     logger.info("Found %d solved state(s) to sync to CTFd.", len(rows))
 
     with httpx.Client(timeout=TIMEOUT, follow_redirects=True) as client:
-        import re
-
-        # Admin login
-        get_admin_token(client)
-
-        # Get a fresh nonce for API calls
-        r = client.get(f"{CTFD_URL}/")
-        match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
-        nonce = match.group(1) if match else ""
+        nonce = admin_login(client)
 
         for state, user, level in rows:
             challenge_id = level.ctfd_challenge_id
             if not challenge_id:
+                logger.warning("Level %s has no ctfd_challenge_id — skipping.", level.id)
+                continue
+
+            # --- Look up the real CTFd user ID by username ---
+            ctfd_user_id = get_ctfd_user_id_by_name(client, user.username)
+            if ctfd_user_id is None:
                 logger.warning(
-                    "Level %s has no ctfd_challenge_id — skipping.", level.id
+                    "  ⚠️  User '%s' not found in CTFd — skipping (they may not have registered yet).",
+                    user.username,
                 )
                 continue
 
-            ctf_user_id = user.ctf_user_id
             logger.info(
-                "Syncing: user=%s (ctf_id=%s) level=%s challenge=%s flag=%s",
-                user.username, ctf_user_id, level.id, challenge_id, state.flag_value,
+                "Syncing: user=%s (ctfd_id=%s) level=%s challenge=%s flag=%s",
+                user.username, ctfd_user_id, level.id, challenge_id, state.flag_value,
             )
 
-            # Use admin submissions endpoint to record the solve directly
+            # --- Skip if already recorded in CTFd ---
+            if solve_already_in_ctfd(client, ctfd_user_id, challenge_id):
+                logger.info("  ⏭️  Already in CTFd scoreboard — skipping.")
+                continue
+
+            # --- POST the solve via admin submissions endpoint ---
             payload = {
                 "challenge_id": challenge_id,
-                "user_id": ctf_user_id,
+                "user_id": ctfd_user_id,
                 "type": "correct",
                 "provided": state.flag_value,
             }
@@ -125,11 +148,11 @@ def sync():
             if resp.status_code in (200, 201):
                 logger.info("  ✅ Synced successfully.")
             elif resp.status_code == 400:
-                logger.info("  ⚠️  Already recorded in CTFd (skipping): %s", resp.text[:120])
+                logger.info("  ⏭️  Already recorded in CTFd (400 dupe): %s", resp.text[:120])
             else:
                 logger.warning(
-                    "  ❌ Unexpected response HTTP %s: %s",
-                    resp.status_code, resp.text[:120],
+                    "  ❌ Unexpected HTTP %s: %s",
+                    resp.status_code, resp.text[:200],
                 )
 
     db.close()
