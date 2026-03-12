@@ -27,7 +27,8 @@ class MeResponse(BaseModel):
 
 class SubmitFlagRequest(BaseModel):
     flag: str
-    level_id: int  # Backend resolves this to ctfd_challenge_id via DB
+    level_id: int
+    username: str = ""  # passed from frontend; used to look up user's assigned flag
 
 
 class SubmitFlagResponse(BaseModel):
@@ -108,25 +109,11 @@ def submit_flag(
             detail="You need to be logged in to submit a flag. Please log in at the main page.",
         )
 
-    # 2b. Validate flag locally against user's assigned flag first
-    # CTFd returns 'already_solved' for any submission after a correct one,
-    # regardless of whether the new submission is correct. We must gate on our
-    # own DB to avoid false positives.
-
-    # Look up username from CTFd session, then find their UserLevelState
-    try:
-        with httpx.Client(timeout=REQUEST_TIMEOUT) as me_client:
-            me_resp = me_client.get(
-                f"{CTFD_INTERNAL_URL}/api/v1/users/me",
-                cookies=cookies,
-            )
-        me_data = me_resp.json().get("data", {})
-        ctfd_username = me_data.get("name", "")
-    except Exception:
-        ctfd_username = ""
-
-    if ctfd_username:
-        user = db.query(User).filter(User.username == ctfd_username).first()
+    # 2b. Validate flag locally using username from request body.
+    # CTFd returns 'already_solved' for ANY submission after the first correct one,
+    # so we MUST verify against our own DB to avoid false positives.
+    if body.username:
+        user = db.query(User).filter(User.username == body.username).first()
         if user:
             state = (
                 db.query(UserLevelState)
@@ -142,14 +129,13 @@ def submit_flag(
                     state.flag_value.strip().lower(),
                 )
                 if not flag_correct:
-                    logger.info(
-                        "Local flag check failed for user=%s level_id=%s",
-                        ctfd_username, body.level_id,
-                    )
+                    logger.info("Local flag check FAILED for user=%s level_id=%s", body.username, body.level_id)
                     return SubmitFlagResponse(
                         status="incorrect",
                         message="Incorrect flag. Keep trying!",
                     )
+                logger.info("Local flag check PASSED for user=%s level_id=%s", body.username, body.level_id)
+
 
     # 3. Fetch CSRF nonce — CTFd requires this on every POST to its API
     nonce = get_ctfd_nonce(cookies)

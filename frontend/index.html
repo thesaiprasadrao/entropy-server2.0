@@ -539,6 +539,7 @@ async function api(method, path, body) {
   const res = await fetch('/api' + path, {
     method,
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
@@ -672,7 +673,7 @@ async function submitFlag() {
   const flag = fi.value.trim();
   if (!flag) { toast('Enter a flag first', 'warn'); return; }
   try {
-    const res = await api('POST', '/submit_flag', { flag, level_id: S.currentLevel.id });
+    const res = await api('POST', '/submit_flag', { flag, level_id: S.currentLevel.id, username: S.username });
     if (res.status === 'correct' || res.status === 'already_solved') {
       toast(res.status === 'already_solved' ? '✓ You already solved this level!' : '🎉 Correct flag! Level solved!', 'success');
       addSysMsg('✓ ' + res.message);
