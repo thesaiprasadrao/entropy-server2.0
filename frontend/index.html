@@ -673,7 +673,8 @@ function dot(ok) {
 
 // ===== USERNAME =====
 function setUsername(nameOverride) {
-  const v = nameOverride || document.getElementById('username-input').value.trim();
+  const inputEl = document.getElementById('username-input');
+  const v = nameOverride || (inputEl ? inputEl.value.trim() : '');
   if (!v) { toast('Please enter a name', 'warn'); return; }
   S.username = v;
   saveState({ username: v });
@@ -682,7 +683,10 @@ function setUsername(nameOverride) {
   document.getElementById('topbar').style.display = 'flex';
   loadLevels();
 }
-document.getElementById('username-input').addEventListener('keydown', e => { if (e.key === 'Enter') setUsername(); });
+const userInputEl = document.getElementById('username-input');
+if (userInputEl) {
+  userInputEl.addEventListener('keydown', e => { if (e.key === 'Enter') setUsername(); });
+}
 
 // ===== LEVELS =====
 async function loadLevels() {
