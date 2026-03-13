@@ -100,6 +100,7 @@ def get_or_create_user_level_state(
             user_id=user.id,
             level_id=level_id,
             flag_value=flag,
+            username=username,
         )
         db.add(state)
 
