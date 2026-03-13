@@ -852,6 +852,11 @@ async function sendChat() {
     if (res.memory_limit !== null && res.memory_limit !== undefined) {
       S.memoryUsed = res.memory_used || 0;
       updateMemoryDisplay(S.memoryUsed, res.memory_limit);
+
+      if (res.memory_reset) {
+        toast('Memory exhausted. Conversation restarted.', 'warn');
+        addSysMsg('⚠ Memory limit reached. The AI has forgotten the previous conversation and started over.', true);
+      }
     }
   } catch (e) {
     setTyping(false);

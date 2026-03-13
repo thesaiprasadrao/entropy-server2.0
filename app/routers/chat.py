@@ -96,14 +96,15 @@ def chat(
     )
 
     # 7. Persist updated history for hard levels
+    memory_reset = False
     if memory_limit is not None:
         history.append({"role": "user", "content": body.message})
         history.append({"role": "assistant", "content": llm_response})
 
-        # Trim to last memory_limit exchange pairs (always trim in complete pairs)
         max_messages = memory_limit * 2
-        if len(history) > max_messages:
-            history = history[-max_messages:]
+        if len(history) >= max_messages:
+            history = []
+            memory_reset = True
 
         state.chat_history = json.dumps(history)
         db.commit()
@@ -115,4 +116,5 @@ def chat(
         input_tokens_approx=_approx_token_count(body.message),
         memory_used=memory_used,
         memory_limit=memory_limit,
+        memory_reset=memory_reset,
     )

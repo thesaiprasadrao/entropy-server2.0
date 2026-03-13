@@ -13,3 +13,4 @@ class ChatResponse(BaseModel):
     input_tokens_approx: int
     memory_used: Optional[int] = None    # number of complete exchange pairs in history
     memory_limit: Optional[int] = None  # max exchange pairs allowed (None = stateless)
+    memory_reset: bool = False
