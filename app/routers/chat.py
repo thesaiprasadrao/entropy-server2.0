@@ -64,8 +64,10 @@ def chat(
             detail="Open the level first via POST /levels/{level_id}/open",
         )
 
-    # 4. Per-level token limit check (hard levels override global MAX_INPUT_TOKENS)
-    token_limit = level.token_limit  # None for easy/intermediate levels
+    # 4. Per-level token limits
+    min_input_tokens = level.min_input_tokens
+    max_input_tokens = level.max_input_tokens
+    max_output_tokens = level.max_output_tokens
 
     # 5. Build conversation history for hard levels (memory mode)
     memory_limit = level.memory_limit  # None = stateless (easy/intermediate)
@@ -88,7 +90,9 @@ def chat(
         flag_value=state.flag_value,
         model=level.model,
         conversation_history=conversation_history,
-        token_limit=token_limit,
+        min_input_tokens=min_input_tokens,
+        max_input_tokens=max_input_tokens,
+        max_output_tokens=max_output_tokens,
     )
 
     # 7. Persist updated history for hard levels

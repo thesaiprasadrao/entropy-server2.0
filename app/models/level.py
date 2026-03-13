@@ -21,7 +21,9 @@ class Level(Base):
     hint_policy: Mapped[str] = mapped_column(String(50), nullable=True, default=None)  # 'ai' = AI hints enabled
     difficulty: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)  # easy/intermediate/hard
     memory_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max exchange pairs for hard levels
-    token_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max tokens per prompt for hard levels
+    min_input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # min tokens per prompt
+    max_input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max tokens per prompt
+    max_output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)  # max tokens per LLM output
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )

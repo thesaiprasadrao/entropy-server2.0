@@ -22,7 +22,9 @@ class LevelInfo(BaseModel):
     ctfd_challenge_id: int | None = None
     difficulty: str | None = None
     memory_limit: int | None = None
-    token_limit: int | None = None
+    min_input_tokens: int | None = None
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 @router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
@@ -36,7 +38,9 @@ def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
             ctfd_challenge_id=l.ctfd_challenge_id,
             difficulty=l.difficulty,
             memory_limit=l.memory_limit,
-            token_limit=l.token_limit,
+            min_input_tokens=l.min_input_tokens,
+            max_input_tokens=l.max_input_tokens,
+            max_output_tokens=l.max_output_tokens,
         )
         for l in levels
     ]

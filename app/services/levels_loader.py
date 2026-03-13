@@ -48,7 +48,9 @@ def seed_levels_from_config(db: Session) -> None:
             existing.hint_policy = cfg.get("hint_policy", None)
             existing.difficulty = cfg.get("difficulty", None)
             existing.memory_limit = cfg.get("memory_limit", None)
-            existing.token_limit = cfg.get("token_limit", None)
+            existing.min_input_tokens = cfg.get("min_input_tokens", None)
+            existing.max_input_tokens = cfg.get("max_input_tokens", None)
+            existing.max_output_tokens = cfg.get("max_output_tokens", None)
         else:
             db.add(Level(
                 id=level_id,
@@ -62,7 +64,9 @@ def seed_levels_from_config(db: Session) -> None:
                 hint_policy=cfg.get("hint_policy", None),
                 difficulty=cfg.get("difficulty", None),
                 memory_limit=cfg.get("memory_limit", None),
-                token_limit=cfg.get("token_limit", None),
+                min_input_tokens=cfg.get("min_input_tokens", None),
+                max_input_tokens=cfg.get("max_input_tokens", None),
+                max_output_tokens=cfg.get("max_output_tokens", None),
             ))
 
     db.commit()
