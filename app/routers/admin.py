@@ -1,8 +1,20 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from app.services.admin_state import get_state, set_state
+from app.config import get_settings
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+def verify_admin_token(x_admin_token: str = Header(default=None)):
+    if not x_admin_token or x_admin_token != get_settings().ADMIN_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing admin token",
+        )
+
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_token)]
+)
 
 class StateUpdate(BaseModel):
     value: str
