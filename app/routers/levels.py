@@ -92,12 +92,19 @@ def open_level(
         level_id=level_id,
     )
 
+    import json
+    memory_used = None
+    if level.memory_limit is not None and state.chat_history:
+        history = json.loads(state.chat_history)
+        memory_used = len(history) // 2
+
     return OpenLevelResponse(
         user_id=str(state.user_id),
         level_id=state.level_id,
         flag_value=state.flag_value,
         attempts=state.attempts,
         solved=state.solved,
+        memory_used=memory_used,
     )
 
 

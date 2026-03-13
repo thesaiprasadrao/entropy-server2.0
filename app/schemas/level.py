@@ -11,6 +11,7 @@ class OpenLevelResponse(BaseModel):
     flag_value: str
     attempts: int
     solved: bool
+    memory_used: int | None = None
 
 
 class SubmitFlagRequest(BaseModel):

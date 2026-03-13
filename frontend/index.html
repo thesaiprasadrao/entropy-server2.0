@@ -748,7 +748,13 @@ async function openLevel(id) {
     }
 
     // STEP 1: Show/hide memory counter
-    updateMemoryDisplay(0, level.memory_limit);
+    if (session.memory_used !== undefined && session.memory_used !== null) {
+      S.memoryUsed = session.memory_used;
+      updateMemoryDisplay(S.memoryUsed, level.memory_limit);
+    } else {
+      S.memoryUsed = 0;
+      updateMemoryDisplay(0, level.memory_limit);
+    }
 
     // STEP 2: Show/hide token counter for hard levels
     updateTokenCounterDisplay(level.token_limit);
