@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.level import Level
+from app.models.user_level_state import UserLevelState
 from app.schemas.level import (
     OpenLevelRequest,
     OpenLevelResponse,
@@ -25,11 +27,29 @@ class LevelInfo(BaseModel):
     min_input_tokens: int | None = None
     max_input_tokens: int | None = None
     max_output_tokens: int | None = None
+    solved: bool = False
 
 
 @router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
-def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
+def list_levels(
+    db: Session = Depends(get_db),
+    username: Optional[str] = Query(default=None),
+) -> list[LevelInfo]:
     levels = db.query(Level).order_by(Level.id).all()
+
+    # Build a set of level IDs solved by this user (if username provided)
+    solved_ids: set[int] = set()
+    if username:
+        states = (
+            db.query(UserLevelState)
+            .filter(
+                UserLevelState.username == username,
+                UserLevelState.solved == True,
+            )
+            .all()
+        )
+        solved_ids = {s.level_id for s in states}
+
     return [
         LevelInfo(
             id=l.id,
@@ -41,6 +61,7 @@ def list_levels(db: Session = Depends(get_db)) -> list[LevelInfo]:
             min_input_tokens=l.min_input_tokens,
             max_input_tokens=l.max_input_tokens,
             max_output_tokens=l.max_output_tokens,
+            solved=l.id in solved_ids,
         )
         for l in levels
     ]

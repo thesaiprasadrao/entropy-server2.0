@@ -108,7 +108,7 @@
   .level-item:hover { background: var(--sidebar-hover); }
   .level-item.active { background: var(--sidebar-hover); }
   .level-item-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .solved-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .solved-tick { display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; opacity: 0.9; }
 
   .sidebar-bottom { border-top: 1px solid var(--border); padding: 12px; }
   .user-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
@@ -693,7 +693,8 @@ async function loadLevels() {
   const el = document.getElementById('levels-list');
   el.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted);">Loading...</div>';
   try {
-    S.levels = await api('GET', '/levels/list');
+    const usernameParam = S.username ? `?username=${encodeURIComponent(S.username)}` : '';
+    S.levels = await api('GET', `/levels/list${usernameParam}`);
     // NOTE: solved status comes from backend only — not from localStorage
     renderLevels();
 
@@ -715,7 +716,7 @@ function renderLevels() {
   el.innerHTML = S.levels.map(l => `
     <div class="level-item ${S.currentLevel?.id === l.id ? 'active' : ''}" id="li-${l.id}" onclick="openLevel(${l.id})">
       <span class="level-item-name">${esc(l.name)}</span>
-      ${l.solved ? '<div class="solved-dot" title="Solved"></div>' : ''}
+      ${l.solved ? `<span class="solved-tick" title="Solved"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>` : ''}
     </div>`).join('');
 }
 
