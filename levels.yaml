@@ -732,7 +732,7 @@ levels:
     name: "Level 7 — Hot & Cold"
     difficulty: hard
     memory_limit: 10
-    token_limit: 200
+    max_input_tokens: 200
     ctfd_challenge_id: 7
     description: "You don't need the answer directly. Navigate to it."
     hint_policy: ai
@@ -852,7 +852,7 @@ levels:
     name: "Level 8 — Unleash It"
     difficulty: hard
     memory_limit: 6
-    token_limit: 200
+    max_input_tokens: 200
     ctfd_challenge_id: 8
     description: "The classic. There's a reason it became famous."
     hint_policy: ai
@@ -972,7 +972,7 @@ levels:
     name: "Level 9 — It Was Never Secret"
     difficulty: hard
     memory_limit: 6
-    token_limit: 200
+    max_input_tokens: 200
     ctfd_challenge_id: 9
     description: "What if the instruction to keep the secret was itself a mistake?"
     hint_policy: ai
@@ -1089,7 +1089,7 @@ levels:
     name: "Level 10 — You Already Told Me"
     difficulty: hard
     memory_limit: 6
-    token_limit: 200
+    max_input_tokens: 200
     ctfd_challenge_id: 10
     description: "Memory is unreliable. Or is it?"
     hint_policy: ai
