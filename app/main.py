@@ -18,6 +18,8 @@ app = FastAPI(
     title="Entropy — AI Jailbreak Sprint Backend",
     version="1.0.0",
     description="Secure backend for AI prompt jailbreak challenges.",
+    docs_url=None,  # disable public Swagger UI
+    redoc_url=None,  # disable public ReDoc
 )
 
 # ── CORS (allow Nginx frontend on port 80) ─────────────────────────────────────
