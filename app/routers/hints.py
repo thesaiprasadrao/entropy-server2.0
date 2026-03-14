@@ -30,7 +30,6 @@ HINT_COOLDOWN_SECONDS = 120  # 2 minutes
 
 
 class HintRequest(BaseModel):
-    username: str
     level_id: int
 
 
@@ -124,7 +123,7 @@ def get_hint(
 
     # 8. Record the hint usage
     hint_record.hint_count += 1
-    hint_record.last_hint_time = datetime.utcnow()
+    hint_record.last_hint_time = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
 
     hints_remaining = MAX_HINTS_PER_LEVEL - hint_record.hint_count
