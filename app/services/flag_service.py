@@ -54,8 +54,8 @@ def get_or_create_user(db: Session, username: str) -> User:
 
 def _get_unique_flag(db: Session, level: Level | None, level_id: int) -> str:
     assigned_flags = {
-        row[0] for row in 
-        db.query(UserLevelState.flag_value)
+        row[0]
+        for row in db.query(UserLevelState.flag_value)
         .filter(UserLevelState.level_id == level_id)
         .all()
     }
@@ -95,7 +95,7 @@ def get_or_create_user_level_state(
     if state is None:
         level = db.query(Level).filter(Level.id == level_id).first()
         flag = _get_unique_flag(db, level, level_id)
-        
+
         state = UserLevelState(
             user_id=user.id,
             level_id=level_id,
@@ -148,7 +148,9 @@ def validate_flag(
     state.attempts = (state.attempts or 0) + 1
     state.updated_at = func.now()
 
-    correct = hmac.compare_digest(submitted_flag, state.flag_value)
+    correct = hmac.compare_digest(
+        submitted_flag.strip().lower(), state.flag_value.strip().lower()
+    )
 
     if correct and not state.solved:
         state.solved = True
