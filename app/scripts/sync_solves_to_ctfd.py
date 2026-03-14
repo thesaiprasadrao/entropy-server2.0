@@ -140,12 +140,11 @@ def sync():
                 continue
 
             logger.info(
-                "Syncing: user=%s (ctfd_id=%s) level=%s challenge=%s flag=%s",
+                "Syncing: user=%s (ctfd_id=%s) level=%s challenge=%s",
                 user.username,
                 ctfd_user_id,
                 level.id,
                 challenge_id,
-                state.flag_value,
             )
 
             # --- Skip if already recorded in CTFd ---
