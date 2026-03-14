@@ -5,6 +5,7 @@ Extracts and validates the authenticated username from the CTFd session
 cookie forwarded by Nginx. Caches verified sessions briefly to avoid
 hitting CTFd on every request.
 """
+
 import logging
 import time
 import threading
@@ -73,12 +74,14 @@ def verify_ctfd_session(request: Request) -> str:
             detail="Invalid or expired session. Please log in via CTFd.",
         )
 
-    # Cache the result
+    # Cache the result, then evict only expired entries if cache is large.
+    # Never clear() the whole dict — that would log out all active users at once.
     with _cache_lock:
         _session_cache[session_val] = (username, now + _CACHE_TTL)
 
-        # Evict expired entries periodically (keep cache bounded)
         if len(_session_cache) > 500:
-            _session_cache.clear()
+            expired_keys = [k for k, (_, exp) in _session_cache.items() if exp <= now]
+            for k in expired_keys:
+                del _session_cache[k]
 
     return username
