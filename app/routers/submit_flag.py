@@ -14,6 +14,7 @@ from app.models.level import Level
 from app.models.user import User
 from app.models.user_level_state import UserLevelState
 from app.middleware.auth import verify_ctfd_session
+from app.middleware.rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,15 @@ def submit_flag(
 ) -> SubmitFlagResponse:
     # Enforce authenticated identity — ignore body.username, use verified session
     username = auth_username
+
+    # Rate limit by IP (same strategy as /chat).
+    # X-Real-IP is set by Nginx (proxy_set_header X-Real-IP $remote_addr) and
+    # overwrites any client-supplied header, so it is safe to trust here.
+    client_ip = request.headers.get("X-Real-IP") or (
+        request.client.host if request.client else "unknown"
+    )
+    check_rate_limit(client_ip)
+
     # 1. Resolve level_id → ctfd_challenge_id from DB
     level = db.query(Level).filter(Level.id == body.level_id).first()
     if level is None:
