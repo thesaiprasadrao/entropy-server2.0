@@ -32,12 +32,15 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from app.services.admin_state import get_state
 
+
 @app.middleware("http")
 async def check_global_shutdown(request: Request, call_next):
-    if not request.url.path.startswith("/admin") and get_state("global_shutdown") == "true":
+    path = request.url.path
+    is_admin = path == "/admin" or path.startswith("/admin/")
+    if not is_admin and get_state("global_shutdown") == "true":
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"detail": "System is down for maintenance"}
+            content={"detail": "System is down for maintenance"},
         )
     return await call_next(request)
 
