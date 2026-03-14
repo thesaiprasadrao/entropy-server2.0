@@ -109,7 +109,6 @@ def open_level(
         memory_used = len(history) // 2
 
     return OpenLevelResponse(
-        user_id=str(state.user_id),
         level_id=state.level_id,
         attempts=state.attempts,
         solved=state.solved,

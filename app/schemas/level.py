@@ -6,7 +6,6 @@ class OpenLevelRequest(BaseModel):
 
 
 class OpenLevelResponse(BaseModel):
-    user_id: str
     level_id: int
     attempts: int
     solved: bool
