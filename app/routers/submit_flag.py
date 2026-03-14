@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.level import Level
 from app.models.user import User
 from app.models.user_level_state import UserLevelState
+from app.middleware.auth import verify_ctfd_session
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,17 @@ def _get_admin_session_cookies() -> dict:
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
             r = client.get(f"{CTFD_INTERNAL_URL}/login")
-            match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
+            match = re.search(
+                r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text
+            )
             nonce = match.group(1) if match else ""
             r = client.post(
                 f"{CTFD_INTERNAL_URL}/login",
-                data={"name": CTFD_ADMIN_EMAIL, "password": CTFD_ADMIN_PASSWORD, "nonce": nonce},
+                data={
+                    "name": CTFD_ADMIN_EMAIL,
+                    "password": CTFD_ADMIN_PASSWORD,
+                    "nonce": nonce,
+                },
                 follow_redirects=True,
             )
             if r.status_code >= 400 or "Incorrect" in r.text:
@@ -51,7 +58,9 @@ def _get_admin_nonce(cookies: dict) -> str:
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
             r = client.get(f"{CTFD_INTERNAL_URL}/", cookies=cookies)
-            match = re.search(r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text)
+            match = re.search(
+                r"['\"]csrfNonce['\"]\s*:\s*['\"]([a-f0-9]+)['\"]", r.text
+            )
             if match:
                 return match.group(1)
     except Exception as exc:
@@ -122,17 +131,21 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
         if resp.status_code in (200, 201):
             logger.info(
                 "CTFd admin sync OK: user=%s (ctfd_id=%s) challenge_id=%s",
-                username, ctfd_real_id, challenge_id,
+                username,
+                ctfd_real_id,
+                challenge_id,
             )
         elif resp.status_code == 400:
             logger.info(
                 "CTFd admin sync: already recorded (user=%s challenge_id=%s)",
-                username, challenge_id,
+                username,
+                challenge_id,
             )
         else:
             logger.warning(
                 "CTFd admin sync unexpected HTTP %s: %s",
-                resp.status_code, resp.text[:200],
+                resp.status_code,
+                resp.text[:200],
             )
             # If 401/403 the cached session expired — clear and retry next time
             if resp.status_code in (401, 403):
@@ -153,7 +166,7 @@ class SubmitFlagRequest(BaseModel):
 
 
 class SubmitFlagResponse(BaseModel):
-    status: str   # "correct" | "incorrect"
+    status: str  # "correct" | "incorrect"
     message: str
 
 
@@ -208,7 +221,10 @@ def submit_flag(
     body: SubmitFlagRequest,
     request: Request,
     db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
 ) -> SubmitFlagResponse:
+    # Enforce authenticated identity — ignore body.username, use verified session
+    username = auth_username
     # 1. Resolve level_id → ctfd_challenge_id from DB
     level = db.query(Level).filter(Level.id == body.level_id).first()
     if level is None:
@@ -219,6 +235,59 @@ def submit_flag(
             status_code=503,
             detail="This level is not yet linked to a CTFd challenge. Check back soon.",
         )
+
+    challenge_id = level.ctfd_challenge_id
+
+    cookies = dict(request.cookies)
+
+    # 2b. Validate flag locally using authenticated username from session.
+    # Our PostgreSQL DB is the source of truth for each user's assigned flag.
+    # We return the result directly here, bypassing CTFd's submission API
+    # (CTFd's cookie handling is unreliable across browsers/origins).
+    user = db.query(User).filter(User.username == username).first()
+    if user:
+        state = (
+            db.query(UserLevelState)
+            .filter(
+                UserLevelState.user_id == user.id,
+                UserLevelState.level_id == body.level_id,
+            )
+            .first()
+        )
+        if state and state.flag_value:
+            flag_correct = hmac.compare_digest(
+                body.flag.strip().lower(),
+                state.flag_value.strip().lower(),
+            )
+            if not flag_correct:
+                logger.info(
+                    "Flag INCORRECT for user=%s level_id=%s", username, body.level_id
+                )
+                return SubmitFlagResponse(
+                    status="incorrect",
+                    message="Incorrect flag. Keep trying!",
+                )
+            # Flag is correct — mark solved in our DB
+            already_solved = state.solved
+            if not already_solved:
+                state.solved = True
+                db.commit()
+            logger.info("Flag CORRECT for user=%s level_id=%s", username, body.level_id)
+
+            # Also forward to CTFd via admin API so the scoreboard registers
+            # the solve with the correct team_id (cookie-based submission loses
+            # team association, causing team names not to appear on the scoreboard).
+            if not already_solved:
+                sync_solve_to_ctfd_admin(
+                    username=user.username,
+                    challenge_id=challenge_id,
+                    flag_value=state.flag_value,
+                )
+
+            return SubmitFlagResponse(
+                status="correct",
+                message="Flag accepted! Level solved.",
+            )
 
     challenge_id = level.ctfd_challenge_id
 
@@ -251,7 +320,11 @@ def submit_flag(
                     state.flag_value.strip().lower(),
                 )
                 if not flag_correct:
-                    logger.info("Flag INCORRECT for user=%s level_id=%s", body.username, body.level_id)
+                    logger.info(
+                        "Flag INCORRECT for user=%s level_id=%s",
+                        body.username,
+                        body.level_id,
+                    )
                     return SubmitFlagResponse(
                         status="incorrect",
                         message="Incorrect flag. Keep trying!",
@@ -261,7 +334,9 @@ def submit_flag(
                 if not already_solved:
                     state.solved = True
                     db.commit()
-                logger.info("Flag CORRECT for user=%s level_id=%s", body.username, body.level_id)
+                logger.info(
+                    "Flag CORRECT for user=%s level_id=%s", body.username, body.level_id
+                )
 
                 # Also forward to CTFd via admin API so the scoreboard registers
                 # the solve with the correct team_id (cookie-based submission loses
@@ -277,7 +352,6 @@ def submit_flag(
                     status="correct",
                     message="Flag accepted! Level solved.",
                 )
-
 
     # 3. Fetch CSRF nonce — CTFd requires this on every POST to its API
     nonce = get_ctfd_nonce(cookies)
@@ -313,7 +387,9 @@ def submit_flag(
 
     except httpx.TimeoutException:
         logger.error("CTFd request timed out after %.1fs", REQUEST_TIMEOUT)
-        raise HTTPException(status_code=504, detail="CTFd validation timed out. Try again.")
+        raise HTTPException(
+            status_code=504, detail="CTFd validation timed out. Try again."
+        )
 
     except httpx.RequestError as exc:
         logger.error("CTFd network error: %s", exc)
@@ -326,10 +402,10 @@ def submit_flag(
             exc.response.text[:200],
         )
         if exc.response.status_code in (401, 403):
-                raise HTTPException(
-                    status_code=401,
-                    detail="Your session has expired. Please log in again at the main page.",
-                )
+            raise HTTPException(
+                status_code=401,
+                detail="Your session has expired. Please log in again at the main page.",
+            )
         raise HTTPException(status_code=502, detail="CTFd rejected the request.")
 
     # 4. Parse CTFd response
@@ -346,5 +422,7 @@ def submit_flag(
 
     return SubmitFlagResponse(
         status=ctfd_status,
-        message="Flag accepted! Level solved." if ctfd_status == "correct" else "Incorrect flag. Keep trying!",
+        message="Flag accepted! Level solved."
+        if ctfd_status == "correct"
+        else "Incorrect flag. Keep trying!",
     )

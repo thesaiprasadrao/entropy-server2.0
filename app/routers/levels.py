@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ from app.schemas.level import (
     SubmitFlagResponse,
 )
 from app.services.flag_service import get_or_create_user_level_state, validate_flag
+from app.middleware.auth import verify_ctfd_session
 
 router = APIRouter(prefix="/levels", tags=["levels"])
 
@@ -30,7 +31,9 @@ class LevelInfo(BaseModel):
     solved: bool = False
 
 
-@router.get("/list", response_model=list[LevelInfo], summary="List all available levels")
+@router.get(
+    "/list", response_model=list[LevelInfo], summary="List all available levels"
+)
 def list_levels(
     db: Session = Depends(get_db),
     username: Optional[str] = Query(default=None),
@@ -67,7 +70,6 @@ def list_levels(
     ]
 
 
-
 @router.post(
     "/{level_id}/open",
     response_model=OpenLevelResponse,
@@ -76,8 +78,13 @@ def list_levels(
 def open_level(
     level_id: int,
     body: OpenLevelRequest,
+    request: Request,
     db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
 ) -> OpenLevelResponse:
+    # Enforce authenticated identity — ignore body.username, use verified session
+    username = auth_username
+
     # Verify the level exists
     level = db.query(Level).filter(Level.id == level_id).first()
     if level is None:
@@ -88,11 +95,12 @@ def open_level(
 
     state = get_or_create_user_level_state(
         db=db,
-        username=body.username,
+        username=username,
         level_id=level_id,
     )
 
     import json
+
     memory_used = None
     if level.memory_limit is not None and state.chat_history:
         history = json.loads(state.chat_history)
@@ -101,7 +109,6 @@ def open_level(
     return OpenLevelResponse(
         user_id=str(state.user_id),
         level_id=state.level_id,
-        flag_value=state.flag_value,
         attempts=state.attempts,
         solved=state.solved,
         memory_used=memory_used,
@@ -116,8 +123,13 @@ def open_level(
 def submit_flag(
     level_id: int,
     body: SubmitFlagRequest,
+    request: Request,
     db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
 ) -> SubmitFlagResponse:
+    # Enforce authenticated identity — ignore body.username, use verified session
+    username = auth_username
+
     # Verify the level exists
     level = db.query(Level).filter(Level.id == level_id).first()
     if level is None:
@@ -128,7 +140,7 @@ def submit_flag(
 
     result = validate_flag(
         db=db,
-        username=body.username,
+        username=username,
         level_id=level_id,
         submitted_flag=body.submitted_flag,
     )

@@ -6,10 +6,11 @@ Rules:
 - Max 5 hints per user per level.
 - 2-minute cooldown between hints for the same user/level.
 """
+
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.models.level import Level
 from app.models.user import User
 from app.models.user_hint import UserHint
 from app.services.hint_generator import generate_hint
+from app.middleware.auth import verify_ctfd_session
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +40,21 @@ class HintResponse(BaseModel):
 
 
 @router.post("", response_model=HintResponse, summary="Get an AI hint for a hard level")
-def get_hint(body: HintRequest, db: Session = Depends(get_db)) -> HintResponse:
+def get_hint(
+    body: HintRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
+) -> HintResponse:
+    # Enforce authenticated identity — ignore body.username, use verified session
+    username = auth_username
+
     # 1. Level must exist
     level = db.query(Level).filter(Level.id == body.level_id).first()
     if level is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Level not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Level not found"
+        )
 
     # 2. Only levels with hint_policy = 'ai' support hints
     hint_policy = getattr(level, "hint_policy", None)
@@ -53,7 +65,7 @@ def get_hint(body: HintRequest, db: Session = Depends(get_db)) -> HintResponse:
         )
 
     # 3. User must exist
-    user = db.query(User).filter(User.username == body.username).first()
+    user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -63,12 +75,12 @@ def get_hint(body: HintRequest, db: Session = Depends(get_db)) -> HintResponse:
     # 4. Look up (or create) user hint record
     hint_record = (
         db.query(UserHint)
-        .filter(UserHint.user_id == body.username, UserHint.level_id == body.level_id)
+        .filter(UserHint.user_id == username, UserHint.level_id == body.level_id)
         .first()
     )
     if hint_record is None:
         hint_record = UserHint(
-            user_id=body.username,
+            user_id=username,
             level_id=body.level_id,
             hint_count=0,
             last_hint_time=None,
@@ -118,6 +130,8 @@ def get_hint(body: HintRequest, db: Session = Depends(get_db)) -> HintResponse:
     hints_remaining = MAX_HINTS_PER_LEVEL - hint_record.hint_count
     logger.info(
         "Hint generated: user=%s level=%s count=%s",
-        body.username, body.level_id, hint_record.hint_count
+        username,
+        body.level_id,
+        hint_record.hint_count,
     )
     return HintResponse(hint=hint_text, hints_remaining=hints_remaining)

@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +9,7 @@ from app.models.user_level_state import UserLevelState
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.llm_client import send_prompt, _approx_token_count
 from app.middleware.rate_limiter import check_rate_limit
+from app.middleware.auth import verify_ctfd_session
 from app.services.admin_state import get_state
 
 router = APIRouter(prefix="/levels", tags=["chat"])
@@ -22,10 +23,16 @@ router = APIRouter(prefix="/levels", tags=["chat"])
 def chat(
     level_id: int,
     body: ChatRequest,
+    request: Request,
     db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
 ) -> ChatResponse:
-    # 0. Rate limit — must be first, before any DB work
-    check_rate_limit(body.username)
+    # 0. Enforce authenticated identity — ignore body.username, use verified session
+    username = auth_username
+
+    # 0b. Rate limit by IP — must be first, before any DB work
+    client_ip = request.headers.get("X-Real-IP") or (request.client.host if request.client else "unknown")
+    check_rate_limit(client_ip)
 
     if get_state("pause_ai") == "true":
         raise HTTPException(
