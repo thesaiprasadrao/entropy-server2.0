@@ -48,7 +48,7 @@ services:
       - ctfd
 
   ctfd:
-    image: ctfd/ctfd:latest
+    image: ctfd/ctfd:3.8.2
     container_name: entropy_ctfd
     restart: always
     environment:
