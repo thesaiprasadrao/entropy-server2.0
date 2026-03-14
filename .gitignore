@@ -39,9 +39,12 @@ alembic/versions/__pycache__/
 
 
 # levels
-levels.yaml
+# levels.yaml
 
 # CTFd runtime data (db, uploads, logs — directory kept via ctfd/.gitkeep)
 ctfd/*.db
 ctfd/uploads/
 ctfd/logs/
+
+CLAUDE.md
+SECURITY_AUDIT.md
