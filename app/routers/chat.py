@@ -31,13 +31,15 @@ def chat(
     username = auth_username
 
     # 0b. Rate limit by IP — must be first, before any DB work
-    client_ip = request.headers.get("X-Real-IP") or (request.client.host if request.client else "unknown")
+    client_ip = request.headers.get("X-Real-IP") or (
+        request.client.host if request.client else "unknown"
+    )
     check_rate_limit(client_ip)
 
     if get_state("pause_ai") == "true":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI temporarily paused"
+            detail="AI temporarily paused",
         )
 
     # 1. Level must exist
@@ -49,7 +51,7 @@ def chat(
         )
 
     # 2. User must exist (must have called /open first)
-    user = db.query(User).filter(User.username == body.username).first()
+    user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
