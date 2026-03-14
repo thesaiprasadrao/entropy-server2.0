@@ -1,10 +1,10 @@
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.level import Level
+from app.models.user import User
 from app.models.user_level_state import UserLevelState
 from app.schemas.level import (
     OpenLevelRequest,
@@ -35,18 +35,20 @@ class LevelInfo(BaseModel):
     "/list", response_model=list[LevelInfo], summary="List all available levels"
 )
 def list_levels(
+    request: Request,
     db: Session = Depends(get_db),
-    username: Optional[str] = Query(default=None),
+    auth_username: str = Depends(verify_ctfd_session),
 ) -> list[LevelInfo]:
     levels = db.query(Level).order_by(Level.id).all()
 
-    # Build a set of level IDs solved by this user (if username provided)
+    # Build a set of level IDs solved by the authenticated user
     solved_ids: set[int] = set()
-    if username:
+    user = db.query(User).filter(User.username == auth_username).first()
+    if user:
         states = (
             db.query(UserLevelState)
             .filter(
-                UserLevelState.username == username,
+                UserLevelState.user_id == user.id,
                 UserLevelState.solved == True,
             )
             .all()
