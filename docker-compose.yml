@@ -28,8 +28,7 @@ services:
     volumes:
       - ./levels.yaml:/app/levels.yaml:ro
       - ./app:/app/app:ro
-    ports:
-      - "8000:8000"
+    # No host port published — accessed only via nginx at /api/
     mem_limit: 2g
     depends_on:
       db:
