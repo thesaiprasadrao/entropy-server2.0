@@ -28,9 +28,15 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 CTFD_URL = os.getenv("CTFD_INTERNAL_URL", "http://ctfd:8000")
-CTFD_ADMIN_EMAIL = os.getenv("CTFD_ADMIN_EMAIL", "saiprasadrao1234@gmail.com")
-CTFD_ADMIN_PASSWORD = os.getenv("CTFD_ADMIN_PASSWORD", "Ssaip@9902")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ctf_user:ctf_password@db/ctf_db")
+CTFD_ADMIN_EMAIL = os.getenv("CTFD_ADMIN_EMAIL") or ""
+CTFD_ADMIN_PASSWORD = os.getenv("CTFD_ADMIN_PASSWORD") or ""
+DATABASE_URL = os.getenv("DATABASE_URL") or ""
+
+if not CTFD_ADMIN_EMAIL or not CTFD_ADMIN_PASSWORD or not DATABASE_URL:
+    logger.error(
+        "CTFD_ADMIN_EMAIL, CTFD_ADMIN_PASSWORD and DATABASE_URL must be set in environment"
+    )
+    sys.exit(1)
 
 TIMEOUT = 10.0
 
@@ -43,7 +49,11 @@ def admin_login(client: httpx.Client) -> str:
 
     r = client.post(
         f"{CTFD_URL}/login",
-        data={"name": CTFD_ADMIN_EMAIL, "password": CTFD_ADMIN_PASSWORD, "nonce": nonce},
+        data={
+            "name": CTFD_ADMIN_EMAIL,
+            "password": CTFD_ADMIN_PASSWORD,
+            "nonce": nonce,
+        },
         follow_redirects=True,
     )
     if r.status_code >= 400 or "Incorrect" in r.text:
@@ -72,11 +82,17 @@ def get_ctfd_user_id_by_name(client: httpx.Client, username: str) -> int | None:
     return None
 
 
-def solve_already_in_ctfd(client: httpx.Client, ctfd_user_id: int, challenge_id: int) -> bool:
+def solve_already_in_ctfd(
+    client: httpx.Client, ctfd_user_id: int, challenge_id: int
+) -> bool:
     """Return True if CTFd already has a correct solve for this user+challenge."""
     r = client.get(
         f"{CTFD_URL}/api/v1/submissions",
-        params={"user_id": ctfd_user_id, "challenge_id": challenge_id, "type": "correct"},
+        params={
+            "user_id": ctfd_user_id,
+            "challenge_id": challenge_id,
+            "type": "correct",
+        },
     )
     if r.status_code != 200:
         return False
@@ -109,7 +125,9 @@ def sync():
         for state, user, level in rows:
             challenge_id = level.ctfd_challenge_id
             if not challenge_id:
-                logger.warning("Level %s has no ctfd_challenge_id — skipping.", level.id)
+                logger.warning(
+                    "Level %s has no ctfd_challenge_id — skipping.", level.id
+                )
                 continue
 
             # --- Look up the real CTFd user ID by username ---
@@ -123,7 +141,11 @@ def sync():
 
             logger.info(
                 "Syncing: user=%s (ctfd_id=%s) level=%s challenge=%s flag=%s",
-                user.username, ctfd_user_id, level.id, challenge_id, state.flag_value,
+                user.username,
+                ctfd_user_id,
+                level.id,
+                challenge_id,
+                state.flag_value,
             )
 
             # --- Skip if already recorded in CTFd ---
@@ -148,11 +170,14 @@ def sync():
             if resp.status_code in (200, 201):
                 logger.info("  ✅ Synced successfully.")
             elif resp.status_code == 400:
-                logger.info("  ⏭️  Already recorded in CTFd (400 dupe): %s", resp.text[:120])
+                logger.info(
+                    "  ⏭️  Already recorded in CTFd (400 dupe): %s", resp.text[:120]
+                )
             else:
                 logger.warning(
                     "  ❌ Unexpected HTTP %s: %s",
-                    resp.status_code, resp.text[:200],
+                    resp.status_code,
+                    resp.text[:200],
                 )
 
     db.close()
