@@ -2,7 +2,8 @@ import hmac
 import logging
 import os
 import re
-from functools import lru_cache
+import threading
+import time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,10 +26,33 @@ REQUEST_TIMEOUT = 5.0  # seconds
 CTFD_ADMIN_EMAIL = os.getenv("CTFD_ADMIN_EMAIL", "")
 CTFD_ADMIN_PASSWORD = os.getenv("CTFD_ADMIN_PASSWORD", "")
 
+# TTL-based admin session cache — refresh every 30 minutes instead of
+# caching forever with lru_cache (which never retries on failure).
+_admin_session_lock = threading.Lock()
+_admin_session_cookies: dict = {}
+_admin_session_expires: float = 0.0
+_ADMIN_SESSION_TTL = 1800  # 30 minutes
 
-@lru_cache(maxsize=1)
+
 def _get_admin_session_cookies() -> dict:
-    """Log in to CTFd as admin and return the session cookie dict (cached)."""
+    """Return cached CTFd admin session cookies, refreshing if expired."""
+    global _admin_session_cookies, _admin_session_expires
+    now = time.monotonic()
+    with _admin_session_lock:
+        if _admin_session_cookies and now < _admin_session_expires:
+            return _admin_session_cookies
+
+    # Outside lock: do the actual HTTP login (slow path)
+    cookies = _do_admin_login()
+    with _admin_session_lock:
+        _admin_session_cookies = cookies
+        # If login failed, retry sooner (60s) so transient errors self-heal
+        _admin_session_expires = now + (_ADMIN_SESSION_TTL if cookies else 60)
+    return cookies
+
+
+def _do_admin_login() -> dict:
+    """Perform the CTFd admin login and return session cookies, or {} on failure."""
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
             r = client.get(f"{CTFD_INTERNAL_URL}/login")
@@ -97,10 +121,13 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
         logger.warning("CTFD_ADMIN_EMAIL/PASSWORD not set — skipping admin sync.")
         return
     try:
-        # Get cached admin session (re-login if cookies are empty)
+        # Get cached admin session (re-login if expired or empty)
         cookies = _get_admin_session_cookies()
         if not cookies:
-            _get_admin_session_cookies.cache_clear()
+            # Force immediate re-login on next call
+            with _admin_session_lock:
+                global _admin_session_expires
+                _admin_session_expires = 0.0
             cookies = _get_admin_session_cookies()
         if not cookies:
             logger.warning("Could not obtain admin session for CTFd sync.")
@@ -148,9 +175,11 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
                 resp.status_code,
                 resp.text[:200],
             )
-            # If 401/403 the cached session expired — clear and retry next time
+            # If 401/403 the cached session expired — force re-login next call
             if resp.status_code in (401, 403):
-                _get_admin_session_cookies.cache_clear()
+                with _admin_session_lock:
+                    global _admin_session_expires
+                    _admin_session_expires = 0.0
     except Exception as exc:
         logger.warning("CTFd admin sync error: %s", exc)
 
