@@ -117,6 +117,7 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
     """Submit a correct solve to CTFd via the admin /api/v1/submissions endpoint.
     Looks up CTFd's real sequential user ID by username so team_id is recorded correctly.
     """
+    global _admin_session_expires
     if not CTFD_ADMIN_EMAIL or not CTFD_ADMIN_PASSWORD:
         logger.warning("CTFD_ADMIN_EMAIL/PASSWORD not set — skipping admin sync.")
         return
@@ -126,7 +127,6 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
         if not cookies:
             # Force immediate re-login on next call
             with _admin_session_lock:
-                global _admin_session_expires
                 _admin_session_expires = 0.0
             cookies = _get_admin_session_cookies()
         if not cookies:
@@ -178,7 +178,6 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
             # If 401/403 the cached session expired — force re-login next call
             if resp.status_code in (401, 403):
                 with _admin_session_lock:
-                    global _admin_session_expires
                     _admin_session_expires = 0.0
     except Exception as exc:
         logger.warning("CTFd admin sync error: %s", exc)
