@@ -37,7 +37,7 @@ def get_or_create_user(db: Session, username: str) -> User:
         return user
 
     # Not pre-seeded
-    allow = getattr(get_settings(), "ALLOW_UNKNOWN_TEAMS", True)
+    allow = get_settings().ALLOW_UNKNOWN_TEAMS
     if not allow:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
