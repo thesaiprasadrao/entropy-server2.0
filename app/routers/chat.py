@@ -30,7 +30,10 @@ def chat(
     # 0. Enforce authenticated identity — ignore body.username, use verified session
     username = auth_username
 
-    # 0b. Rate limit by IP — must be first, before any DB work
+    # 0b. Rate limit by IP.
+    # X-Real-IP is set by Nginx (proxy_set_header X-Real-IP $remote_addr) and
+    # overwrites any client-supplied value, so it is safe to trust here.
+    # Falls back to the direct TCP peer (only reachable inside Docker network).
     client_ip = request.headers.get("X-Real-IP") or (
         request.client.host if request.client else "unknown"
     )
@@ -87,6 +90,17 @@ def chat(
         # Load stored history (list of {role, content} dicts)
         stored_raw = state.chat_history
         history: list = json.loads(stored_raw) if stored_raw else []
+
+        # Sanitize: only allow 'user' and 'assistant' roles to prevent a
+        # stored 'system' role from injecting a second system prompt into the LLM.
+        ALLOWED_ROLES = {"user", "assistant"}
+        history = [
+            msg
+            for msg in history
+            if isinstance(msg, dict)
+            and msg.get("role") in ALLOWED_ROLES
+            and isinstance(msg.get("content"), str)
+        ]
 
         # Pass the existing history to the LLM (will be trimmed after response)
         conversation_history = list(history)
