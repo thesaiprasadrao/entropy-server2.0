@@ -1,10 +1,14 @@
+import hmac
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from app.services.admin_state import get_state, set_state
 from app.config import get_settings
 
+
 def verify_admin_token(x_admin_token: str = Header(default=None)):
-    if not x_admin_token or x_admin_token != get_settings().ADMIN_SECRET_KEY:
+    secret = get_settings().ADMIN_SECRET_KEY
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing admin token",
