@@ -55,7 +55,7 @@ def seed_from_csv(filepath: str) -> None:
 
             existing = db.query(User).filter(User.username == team_name).first()
             if existing:
-                print(f"  skip  {team_name!r} (already exists, id={existing.ctfd_user_id})")
+                print(f"  skip  {team_name!r} (already exists, id={existing.ctf_user_id})")
                 skipped += 1
                 continue
 

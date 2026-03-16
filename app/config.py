@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     LLM_API_KEYS: list[str] = []
     # No default — startup will raise a clear error if this is not set in .env
     ADMIN_SECRET_KEY: str
+    # CTFd admin credentials for server-side scoreboard sync.
+    # Both must be set for flag solves to appear on the CTFd scoreboard.
+    # If either is empty, sync is skipped gracefully.
+    CTFD_ADMIN_EMAIL: str = ""
+    CTFD_ADMIN_PASSWORD: str = ""
     # True = auto-create unknown teams (dev/open mode)
     # False = only pre-seeded teams can play (event mode)
     ALLOW_UNKNOWN_TEAMS: bool = True

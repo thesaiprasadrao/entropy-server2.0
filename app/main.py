@@ -28,6 +28,7 @@ app.add_middleware(
     allow_origins=["http://localhost", "http://localhost:80", "http://127.0.0.1"],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    allow_credentials=True,
 )
 
 from fastapi import Request, status
