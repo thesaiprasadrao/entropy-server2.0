@@ -6,7 +6,7 @@ import threading
 import time
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.user_level_state import UserLevelState
 from app.middleware.auth import verify_ctfd_session
 from app.middleware.rate_limiter import check_rate_limit
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,10 @@ router = APIRouter(tags=["flags"])
 
 CTFD_INTERNAL_URL = "http://ctfd:8000"
 REQUEST_TIMEOUT = 5.0  # seconds
-CTFD_ADMIN_EMAIL = os.getenv("CTFD_ADMIN_EMAIL", "")
-CTFD_ADMIN_PASSWORD = os.getenv("CTFD_ADMIN_PASSWORD", "")
+
+def _ctfd_creds():
+    s = get_settings()
+    return s.CTFD_ADMIN_EMAIL, s.CTFD_ADMIN_PASSWORD
 
 # TTL-based admin session cache — refresh every 30 minutes instead of
 # caching forever with lru_cache (which never retries on failure).
@@ -116,8 +119,10 @@ def _lookup_ctfd_user_id_by_name(username: str, cookies: dict) -> int | None:
 def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) -> None:
     """Submit a correct solve to CTFd via the admin /api/v1/submissions endpoint.
     Looks up CTFd's real sequential user ID by username so team_id is recorded correctly.
+    Called as a BackgroundTask so it never blocks the flag submission response.
     """
     global _admin_session_expires
+    CTFD_ADMIN_EMAIL, CTFD_ADMIN_PASSWORD = _ctfd_creds()
     if not CTFD_ADMIN_EMAIL or not CTFD_ADMIN_PASSWORD:
         logger.warning("CTFD_ADMIN_EMAIL/PASSWORD not set — skipping admin sync.")
         return
@@ -181,6 +186,7 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
                     _admin_session_expires = 0.0
     except Exception as exc:
         logger.warning("CTFd admin sync error: %s", exc)
+
 
 
 class MeResponse(BaseModel):
@@ -249,6 +255,7 @@ def get_ctfd_nonce(cookies: dict) -> str:
 def submit_flag(
     body: SubmitFlagRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     auth_username: str = Depends(verify_ctfd_session),
 ) -> SubmitFlagResponse:
@@ -316,7 +323,8 @@ def submit_flag(
             # the solve with the correct team_id (cookie-based submission loses
             # team association, causing team names not to appear on the scoreboard).
             if not already_solved:
-                sync_solve_to_ctfd_admin(
+                background_tasks.add_task(
+                    sync_solve_to_ctfd_admin,
                     username=user.username,
                     challenge_id=challenge_id,
                     flag_value=state.flag_value,
