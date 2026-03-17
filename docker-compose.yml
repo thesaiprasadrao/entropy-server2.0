@@ -12,7 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5433:5432"
-    mem_limit: 1g
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
@@ -29,7 +28,6 @@ services:
       - ./levels.yaml:/app/levels.yaml:ro
       - ./app:/app/app:ro
     # No host port published — accessed only via nginx at /api/
-    mem_limit: 2g
     depends_on:
       db:
         condition: service_healthy
@@ -58,11 +56,14 @@ services:
       - LOG_FOLDER=/var/ctfd/logs
       - WORKERS=1
       - REVERSE_PROXY=true
-    mem_limit: 1g
     volumes:
-      - ./ctfd:/var/ctfd
-    # No host port published — accessed only via nginx at /ctfd/
+      # Named Docker volume avoids host-filesystem permission errors.
+      # CTFd runs as UID 1001 internally; bind-mounts owned by root/host-user cause
+      # "unable to open database file" errors. Named volumes are created with correct ownership.
+      - ctfd_data:/var/ctfd
+    # No host port published — accessed only via nginx at /
 
 
 volumes:
   postgres_data:
+  ctfd_data:
