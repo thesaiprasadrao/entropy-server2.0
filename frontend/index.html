@@ -497,7 +497,7 @@
     <div class="sidebar-logo">
       Entropy 
     </div>
-    <button class="new-chat-btn">
+    <button class="new-chat-btn" onclick="openLevel(S.currentLevel?.id)">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
       </svg>
@@ -541,6 +541,7 @@
       </span>
       <!-- Total tokens sent this session -->
       <span>Total tokens: <b id="meta-tokens">0</b></span>
+      <button class="lb-btn" onclick="getHint()" id="hint-btn">💡 Hint</button>
       <a href="/scoreboard" target="_blank"> <button class="lb-btn">🏆 Leaderboard</button> </a>
     </div>
   </div> 
@@ -551,7 +552,8 @@
   <div id="screen-welcome" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
     <div class="welcome">
       <div class="username-row">
-        <div style="color: var(--text-muted) !important;">Reload the page to start</div>
+        <input type="text" id="username-input" placeholder="Desired username" autocomplete="off" />
+        <button class="btn-primary" onclick="setUsername()">Start</button>
       </div>
     </div>
   </div>
@@ -599,6 +601,19 @@
 
 
 <div id="toast"></div>
+
+<!-- Hint Modal -->
+<div class="overlay" id="hint-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Level Hint</div>
+      <button class="modal-close" onclick="document.getElementById('hint-overlay').classList.remove('open')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="hint-content" class="msg-md" style="font-size: 14px; color: var(--text);">Loading...</div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ============================================================
@@ -764,11 +779,21 @@ async function openLevel(id) {
     clearMessages();
     saveState({ activeLevel: id });
 
-    // Restore chat history from localStorage for display
-    S.chatBuf = getChat(id);
+    // Restore chat history from backend
+    try {
+      const histRes = await api('GET', `/levels/${id}/history`, { username: S.username });
+      S.chatBuf = histRes.messages.map(m => ({
+        role: m.role === 'assistant' ? 'ai' : m.role,
+        text: m.content
+      }));
+      saveChat(id, S.chatBuf); // sync local cache
+    } catch (e) {
+      console.warn("Could not load history from backend, falling back to local cache", e);
+      S.chatBuf = getChat(id);
+    }
+
     if (S.chatBuf.length === 0) {
       addSysMsg(`${level.name} — ${level.description || 'Find the hidden flag.'}`, false);
-      // Don't save system info messages to chat history
     } else {
       S.chatBuf.forEach(m => {
         if (m.role === 'sys') addSysMsg(m.text, false);
@@ -889,6 +914,22 @@ async function submitFlag() {
       addSysMsg('✗ ' + (res.message || 'Incorrect flag. Try again.'));
     }
   } catch (e) { toast('Submit error: ' + e.message, 'error'); }
+}
+
+// ===== HINTS =====
+async function getHint() {
+  if (!S.currentLevel || !S.username) return;
+  const overlay = document.getElementById('hint-overlay');
+  const content = document.getElementById('hint-content');
+  overlay.classList.add('open');
+  content.innerHTML = '<div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
+  
+  try {
+    const res = await api('POST', `/levels/${S.currentLevel.id}/hint`, { username: S.username });
+    content.innerHTML = DOMPurify.sanitize(marked.parse(res.hint || 'No hint available.'));
+  } catch (e) {
+    content.innerHTML = `<span style="color:#f77">${esc(e.message)}</span>`;
+  }
 }
 
 // ===== MESSAGES =====
