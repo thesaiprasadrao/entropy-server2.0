@@ -781,7 +781,7 @@ async function openLevel(id) {
 
     // Restore chat history from backend
     try {
-      const histRes = await api('GET', `/levels/${id}/history`, { username: S.username });
+      const histRes = await api('GET', `/levels/${id}/history`);
       S.chatBuf = histRes.messages.map(m => ({
         role: m.role === 'assistant' ? 'ai' : m.role,
         text: m.content
