@@ -22,13 +22,16 @@ app = FastAPI(
     redoc_url=None,  # disable public ReDoc
 )
 
-# ── CORS (allow Nginx frontend on port 80) ─────────────────────────────────────
+# ── CORS (allow all origins — Nginx is the true access gatekeeper) ───────────
+# We serve through Nginx which already enforces origin constraints at the
+# network level. The CORS middleware here is kept permissive so the backend
+# works both locally and from any production host/IP without reconfiguration.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:80", "http://127.0.0.1"],
+    allow_origins=["*"],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
-    allow_credentials=True,
+    allow_credentials=False,  # credentials=True is incompatible with allow_origins=["*"]
 )
 
 from fastapi import Request, status
@@ -80,13 +83,33 @@ def on_startup():
     except Exception as e:
         logger.error(f"Failed to seed levels: {e}")
 
-    # Auto-sync CTFd challenges in the background
+    # Auto-sync CTFd challenges in the background — retry patiently for up to 5 min
     def delayed_sync():
-        logger.info("Waiting for CTFd to initialize before syncing challenges...")
-        time.sleep(5)  # Give CTFd a few seconds to start up if both are booting
-        try:
-            sync_challenges()
-        except Exception as e:
-            logger.error(f"Auto-sync failed (CTFd might not be set up yet): {e}")
+        max_retries = 30  # 30 × 10s = 5 minutes
+        for attempt in range(1, max_retries + 1):
+            try:
+                sync_challenges()
+                logger.info("✅ CTFd challenge sync complete.")
+                return
+            except Exception as exc:
+                msg = str(exc)
+                if "setup mode" in msg or "setup" in msg.lower():
+                    logger.info(
+                        "CTFd sync attempt %d/%d: CTFd setup not complete yet, retrying in 10s…",
+                        attempt, max_retries
+                    )
+                elif "connection" in msg.lower() or "connect" in msg.lower():
+                    logger.info(
+                        "CTFd sync attempt %d/%d: CTFd not reachable yet, retrying in 10s…",
+                        attempt, max_retries
+                    )
+                else:
+                    logger.warning(
+                        "CTFd sync attempt %d/%d failed: %s. Retrying in 10s…",
+                        attempt, max_retries, exc
+                    )
+                time.sleep(10)
+        logger.error("CTFd auto-sync gave up after %d retries. Run sync manually:", max_retries)
+        logger.error("  docker compose exec backend python3 -m app.scripts.sync_ctfd")
 
     threading.Thread(target=delayed_sync, daemon=True).start()

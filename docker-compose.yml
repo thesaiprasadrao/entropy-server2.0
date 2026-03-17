@@ -12,12 +12,24 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5433:5432"
-    mem_limit: 1g
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  ctfd_db:
+    image: mariadb:10.11
+    container_name: entropy_ctfd_db
+    restart: always
+    environment:
+      - MARIADB_ROOT_PASSWORD=ctfd
+      - MARIADB_USER=ctfd
+      - MARIADB_PASSWORD=ctfd
+      - MARIADB_DATABASE=ctfd
+    volumes:
+      - ctfd_mysql_data:/var/lib/mysql
+    # No ports exposed to host. Over docker network only.
 
   backend:
     build: .
@@ -29,7 +41,6 @@ services:
       - ./levels.yaml:/app/levels.yaml:ro
       - ./app:/app/app:ro
     # No host port published — accessed only via nginx at /api/
-    mem_limit: 2g
     depends_on:
       db:
         condition: service_healthy
@@ -51,18 +62,29 @@ services:
     image: ctfd/ctfd:3.8.2
     container_name: entropy_ctfd
     restart: always
+    user: root # Run as root initially to fix volume permissions, then drop to UID 1001
+    entrypoint: >
+      /bin/sh -c "
+      chown -R 1001:1001 /var/ctfd &&
+      su ctfd -s /bin/sh -c '/opt/CTFd/docker-entrypoint.sh'
+      "
     environment:
       - SECRET_KEY=${CTFD_SECRET_KEY}
-      - DATABASE_URL=sqlite:////var/ctfd/ctfd.db
+      # CTFd official image ships with PyMySQL.
+      # MariaDB prevents SQLite volume root-permission errors.
+      - DATABASE_URL=mysql+pymysql://ctfd:ctfd@ctfd_db/ctfd
       - UPLOAD_FOLDER=/var/ctfd/uploads
       - LOG_FOLDER=/var/ctfd/logs
       - WORKERS=1
       - REVERSE_PROXY=true
-    mem_limit: 1g
     volumes:
-      - ./ctfd:/var/ctfd
-    # No host port published — accessed only via nginx at /ctfd/
+      - ctfd_uploads:/var/ctfd
+    depends_on:
+      - ctfd_db
+    # No host port published — accessed only via nginx at /
 
 
 volumes:
   postgres_data:
+  ctfd_mysql_data:
+  ctfd_uploads:
