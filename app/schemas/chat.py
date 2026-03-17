@@ -14,3 +14,10 @@ class ChatResponse(BaseModel):
     memory_used: Optional[int] = None  # number of complete exchange pairs in history
     memory_limit: Optional[int] = None  # max exchange pairs allowed (None = stateless)
     memory_reset: bool = False
+
+class ChatHistoryMessage(BaseModel):
+    role: str
+    content: str
+    
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatHistoryMessage]

@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.level import Level
 from app.models.user import User
 from app.models.user_level_state import UserLevelState
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, ChatHistoryResponse, ChatHistoryMessage
 from app.services.llm_client import send_prompt, _approx_token_count
 from app.middleware.rate_limiter import check_rate_limit
 from app.middleware.auth import verify_ctfd_session
@@ -141,3 +141,42 @@ def chat(
         memory_limit=memory_limit,
         memory_reset=memory_reset,
     )
+
+@router.get(
+    "/{level_id}/history",
+    response_model=ChatHistoryResponse,
+    summary="Get active chat history for a level",
+)
+def get_chat_history(
+    level_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth_username: str = Depends(verify_ctfd_session),
+) -> ChatHistoryResponse:
+    user = db.query(User).filter(User.username == auth_username).first()
+    if not user:
+        return ChatHistoryResponse(messages=[])
+        
+    state = (
+        db.query(UserLevelState)
+        .filter(
+            UserLevelState.user_id == user.id,
+            UserLevelState.level_id == level_id,
+        )
+        .first()
+    )
+    
+    if not state or not state.chat_history:
+        return ChatHistoryResponse(messages=[])
+
+    history = json.loads(state.chat_history)
+    messages = []
+    
+    for msg in history:
+        if isinstance(msg, dict) and msg.get("role") in {"user", "assistant"}:
+            messages.append(ChatHistoryMessage(
+                role=msg.get("role"),
+                content=msg.get("content", "")
+            ))
+            
+    return ChatHistoryResponse(messages=messages)

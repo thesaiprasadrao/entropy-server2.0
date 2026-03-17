@@ -30,6 +30,11 @@ class LevelInfo(BaseModel):
     max_output_tokens: int | None = None
     solved: bool = False
 
+    @property
+    def token_limit(self) -> int | None:
+        """Alias for max_input_tokens to match frontend expectations"""
+        return self.max_input_tokens
+
 
 @router.get(
     "/list", response_model=list[LevelInfo], summary="List all available levels"
