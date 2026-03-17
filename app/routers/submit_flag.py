@@ -96,8 +96,8 @@ def _get_admin_nonce(cookies: dict) -> str:
     return ""
 
 
-def _lookup_ctfd_user_id_by_name(username: str, cookies: dict) -> int | None:
-    """Look up CTFd's real sequential integer user ID by username.
+def _lookup_ctfd_user_info_by_name(username: str, cookies: dict) -> dict | None:
+    """Look up CTFd's real user info (including team_id) by username.
     Postgres stores a different ctf_user_id that is NOT CTFd's PK.
     """
     try:
@@ -110,7 +110,15 @@ def _lookup_ctfd_user_id_by_name(username: str, cookies: dict) -> int | None:
         if resp.status_code == 200:
             for u in resp.json().get("data", []):
                 if u.get("name", "").lower() == username.lower():
-                    return u["id"]
+                    # Fetch full user document to ensure we have team_id
+                    with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client2:
+                        r_user = client2.get(
+                            f"{CTFD_INTERNAL_URL}/api/v1/users/{u['id']}",
+                            cookies=cookies
+                        )
+                    if r_user.status_code == 200:
+                        return r_user.json().get("data", u)
+                    return u
     except Exception as exc:
         logger.warning("CTFd user lookup error for '%s': %s", username, exc)
     return None
@@ -138,18 +146,22 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
             logger.warning("Could not obtain admin session for CTFd sync.")
             return
 
-        # Look up CTFd's real sequential user ID (NOT Postgres ctf_user_id)
-        ctfd_real_id = _lookup_ctfd_user_id_by_name(username, cookies)
-        if ctfd_real_id is None:
+        # Look up CTFd's real user info
+        ctfd_user_info = _lookup_ctfd_user_info_by_name(username, cookies)
+        if ctfd_user_info is None:
             logger.warning(
                 "CTFd user '%s' not found — skipping scoreboard sync.", username
             )
             return
 
+        ctfd_real_id = ctfd_user_info["id"]
+        ctfd_team_id = ctfd_user_info.get("team_id")
+
         nonce = _get_admin_nonce(cookies)
         payload = {
             "challenge_id": challenge_id,
             "user_id": ctfd_real_id,
+            "team_id": ctfd_team_id,
             "type": "correct",
             "provided": flag_value,
         }
@@ -163,9 +175,10 @@ def sync_solve_to_ctfd_admin(username: str, challenge_id: int, flag_value: str) 
             )
         if resp.status_code in (200, 201):
             logger.info(
-                "CTFd admin sync OK: user=%s (ctfd_id=%s) challenge_id=%s",
+                "CTFd admin sync OK: user=%s (ctfd_id=%s, team_id=%s) challenge_id=%s",
                 username,
                 ctfd_real_id,
+                ctfd_team_id,
                 challenge_id,
             )
         elif resp.status_code == 400:

@@ -67,9 +67,9 @@ def admin_login(client: httpx.Client) -> str:
     return match.group(1) if match else ""
 
 
-def get_ctfd_user_id_by_name(client: httpx.Client, username: str) -> int | None:
+def get_ctfd_user_info_by_name(client: httpx.Client, username: str) -> dict | None:
     """
-    Look up CTFd's internal sequential user ID by username.
+    Look up CTFd's internal user info by username.
     Postgres stores ctf_user_id which is NOT the same as CTFd's integer PK.
     """
     r = client.get(f"{CTFD_URL}/api/v1/users", params={"q": username, "field": "name"})
@@ -78,7 +78,11 @@ def get_ctfd_user_id_by_name(client: httpx.Client, username: str) -> int | None:
     results = r.json().get("data", [])
     for u in results:
         if u.get("name", "").lower() == username.lower():
-            return u["id"]
+            # Fetch full user document to ensure we have team_id
+            r_user = client.get(f"{CTFD_URL}/api/v1/users/{u['id']}")
+            if r_user.status_code == 200:
+                return r_user.json().get("data", u)
+            return u
     return None
 
 
@@ -130,19 +134,23 @@ def sync():
                 )
                 continue
 
-            # --- Look up the real CTFd user ID by username ---
-            ctfd_user_id = get_ctfd_user_id_by_name(client, user.username)
-            if ctfd_user_id is None:
+            # --- Look up the real CTFd user info by username ---
+            ctfd_user_info = get_ctfd_user_info_by_name(client, user.username)
+            if ctfd_user_info is None:
                 logger.warning(
                     "  ⚠️  User '%s' not found in CTFd — skipping (they may not have registered yet).",
                     user.username,
                 )
                 continue
 
+            ctfd_user_id = ctfd_user_info["id"]
+            ctfd_team_id = ctfd_user_info.get("team_id")
+
             logger.info(
-                "Syncing: user=%s (ctfd_id=%s) level=%s challenge=%s",
+                "Syncing: user=%s (ctfd_id=%s, team_id=%s) level=%s challenge=%s",
                 user.username,
                 ctfd_user_id,
+                ctfd_team_id,
                 level.id,
                 challenge_id,
             )
@@ -156,6 +164,7 @@ def sync():
             payload = {
                 "challenge_id": challenge_id,
                 "user_id": ctfd_user_id,
+                "team_id": ctfd_team_id,
                 "type": "correct",
                 "provided": state.flag_value,
             }
