@@ -30,7 +30,7 @@ def load_env() -> dict:
 def load_levels() -> list[dict]:
     if not LEVELS_FILE.exists():
         logger.error(f"levels.yaml not found at {LEVELS_FILE}")
-        sys.exit(1)
+        raise Exception("CTFd connection failed")
     with open(LEVELS_FILE, "r") as f:
         data = yaml.safe_load(f)
     return data.get("levels", [])
@@ -43,7 +43,7 @@ def admin_login(client: httpx.Client, env: dict) -> bool:
         r = client.get(f"{CTFD_URL}/login")
     except httpx.ConnectError:
         logger.error(f"Could not connect to CTFd at {CTFD_URL}. Is it running?")
-        sys.exit(1)
+        raise Exception("CTFd connection failed")
 
     nonce_match = re.search(r"['\"](csrfNonce)['\"]\s*:\s*\"([a-f0-9]+)\"", r.text)
     if not nonce_match:
@@ -52,7 +52,7 @@ def admin_login(client: httpx.Client, env: dict) -> bool:
                 "CTFd has not been set up yet! Please visit http://localhost/ "
                 "in your browser and complete the initial setup wizard first."
             )
-            sys.exit(1)
+            raise Exception("CTFd connection failed")
         nonce = ""
     else:
         nonce = nonce_match.group(2)
@@ -64,7 +64,7 @@ def admin_login(client: httpx.Client, env: dict) -> bool:
         logger.error(
             "Please add the admin credentials you created during the CTFd setup to the .env file."
         )
-        sys.exit(1)
+        raise Exception("CTFd connection failed")
 
     logger.info(f"Logging into CTFd as {username}...")
     r = client.post(
@@ -79,7 +79,7 @@ def admin_login(client: httpx.Client, env: dict) -> bool:
 
     if "incorrect" in r.text.lower() or "invalid" in r.text.lower():
         logger.error("Login failed! Check your CTFd admin credentials in the .env file.")
-        sys.exit(1)
+        raise Exception("CTFd connection failed")
 
     check = client.get(
         f"{CTFD_URL}/api/v1/challenges",
@@ -87,7 +87,7 @@ def admin_login(client: httpx.Client, env: dict) -> bool:
     )
     if check.status_code == 403:
         logger.error("Login succeeded but user is not an Admin.")
-        sys.exit(1)
+        raise Exception("CTFd connection failed")
 
     logger.info("✅ Admin session established.")
 
