@@ -80,6 +80,42 @@ def read_csv(filename: str) -> dict:
         sys.exit(1)
 
 
+def validate_csv_data(teams_data: dict) -> bool:
+    """Validate all rows before making any API calls. Return True if all valid."""
+    print("\n🔍 Validating CSV data before processing...\n")
+
+    invalid_rows = []
+
+    for reg_no, members in teams_data.items():
+        for idx, m in enumerate(members, 1):
+            name = m.get("Name", "").strip()
+            email = m.get("Email", "").strip()
+            team_name = m.get("Team Name", "").strip()
+
+            if not team_name:
+                invalid_rows.append(
+                    f"Row (Reg No: {reg_no}, Index: {idx}): Missing Team Name"
+                )
+            if not name:
+                invalid_rows.append(
+                    f"Row (Reg No: {reg_no}, Index: {idx}): Missing Name"
+                )
+            if not email:
+                invalid_rows.append(
+                    f"Row (Reg No: {reg_no}, Index: {idx}): Missing Email"
+                )
+
+    if invalid_rows:
+        print("❌ VALIDATION FAILED - Found invalid rows:\n")
+        for error in invalid_rows:
+            print(f"   • {error}")
+        print(f"\n❌ Fix the CSV file and try again. No data was imported to CTFd.")
+        return False
+
+    print("✅ All rows are valid - proceeding with import\n")
+    return True
+
+
 def create_team(team_name: str, team_pass: str) -> Optional[dict]:
     """Create or get team in CTFd."""
     try:
@@ -189,7 +225,11 @@ def main():
         print("❌ No data found in CSV")
         sys.exit(1)
 
-    print(f"\n🔧 Processing {len(teams_data)} teams...\n")
+    # Validate ALL rows before making any API calls
+    if not validate_csv_data(teams_data):
+        sys.exit(1)
+
+    print(f"🔧 Processing {len(teams_data)} teams...\n")
 
     # Step 1: Create teams
     team_map = {}  # team_name -> {id, password}
