@@ -120,7 +120,7 @@ if load_dotenv:
 EMAIL_TEMPLATE = """
 Hello {user_name},
 
-Welcome to the CTF Challenge! Here are your login credentials:
+Welcome to the Entropy! Here are your login credentials:
 
 ──────────────────────────────────────────────────────
 TEAM LOGIN
@@ -135,7 +135,7 @@ Password: {user_password}
 
 ──────────────────────────────────────────────────────
 
-🔗 Platform URL: {platform_url}
+🔗 Platform URL: entropy.phoenix3.live
 
 📝 Instructions:
 1. Go to the platform URL above
