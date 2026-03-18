@@ -879,7 +879,7 @@ levels:
       - vintage
       - weather
 
-    - id: 8
+  - id: 8
     name: "Level 8 — The Slow Burn"
     difficulty: hard
     memory_limit: 4
