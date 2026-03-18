@@ -99,10 +99,19 @@ import argparse
 from typing import Optional, List, Dict
 
 try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+try:
     import requests
 except ImportError:
     print("❌ requests library not found. Install with: pip install requests")
     sys.exit(1)
+
+# Load environment variables from .env file
+if load_dotenv:
+    load_dotenv()
 
 
 # ============================================================================
