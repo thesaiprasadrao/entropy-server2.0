@@ -390,7 +390,7 @@ def main():
 
     print(f"📨 Processing {len(grouped)} emails...\n")
 
-    subject = "CTF Challenge Credentials"
+    subject = "Entropy Challenge Credentials"
     successful = 0
     failed = 0
 
